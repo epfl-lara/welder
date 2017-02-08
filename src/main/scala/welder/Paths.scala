@@ -7,11 +7,12 @@ import scala.reflect.ClassTag
 import inox._
 import inox.ast._
 
+/** Contains definitions related to paths within expressions. */
 trait Paths { self: Theory =>
   
   import program.trees._
 
-  /** Models an expression within a context. */
+  /** Contains an expression and a context. */
   trait Focus {
 
     /** The expression without its context. */
@@ -68,7 +69,7 @@ trait Paths { self: Theory =>
   /** Selects the children in the given range. `0`-indexed. */
   def children(range: Range): Selector = new Selector {
     def select(expr: Expr, subexprs: Seq[Expr]): Stream[Int] = {
-      range.toStream.filter((x: Int) => x >= 0 && x < subexprs.size)
+      range.toStream.dropWhile(_ < 0).takeWhile(_ < subexprs.size)
     }
   }
 
