@@ -165,7 +165,7 @@ trait Rules { self: Theory =>
    *
    * @param assumption An expression to assume. Should be of type `BooleanType`.
    * @param conclusion The derivation of a `Theorem`, assuming the `assumption`.
-   * @return A `Theorem` of the implication, or `None`. 
+   * @return A `Theorem` of the implication.
    */
   def implI(assumption: Expr)(conclusion: Theorem => Attempt[Theorem]): Attempt[Theorem] = {
     
@@ -192,6 +192,15 @@ trait Rules { self: Theory =>
     new Theorem(Forall(Seq(x.toVal, y.toVal), expr))
   }
 
+  /** Implication elimination.
+   *
+   * Given a proven `implication`, and a `proof` of the premise of the implication,
+   * returns the conclusion as a `Theorem`.
+   *
+   * @param implication A proven implication. Should be of the form `Implies( ... )`.
+   * @param proof       Proof of the premise of the implication.
+   * @return The proven conclusion.
+   */
   def implE(implication: Theorem)(proof: Goal => Attempt[Witness]): Attempt[Theorem] = 
     implication.expression match {
       case Implies(condition, body) => {
