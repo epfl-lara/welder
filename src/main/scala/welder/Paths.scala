@@ -17,7 +17,7 @@ trait Paths { self: Theory =>
     /** The expression without its context. */
     val get: Expr
 
-    /** The context.
+    /** Function to embbed an expression within the context.
      *
      * @param replacement An expression to embed in the context.
      * @return The `replacement`, embedded in the context.
@@ -40,16 +40,12 @@ trait Paths { self: Theory =>
     }
   }
 
-  // TODO:
-  // rhs / lhs
-  // child(i)
-  // children(i, j*)
-  // children(Range[..])
-
+  /** Defines the next subexpressions on a `Path`. */
   sealed trait Selector {
     def select(expr: Expr, subexprs: Seq[Expr]): Stream[Int]
   }
 
+  /** Selects the child at position `i`. `0`-indexed. */
   def child(i: Int): Selector = new Selector {
 
     def select(expr: Expr, subexprs: Seq[Expr]): Stream[Int] = {
@@ -62,6 +58,21 @@ trait Paths { self: Theory =>
     }
   }
 
+  /** Selects the children at all given positions. `0`-indexed. */
+  def children(i: Int, js: Int*): Selector = new Selector {
+    def select(expr: Expr, subexprs: Seq[Expr]): Stream[Int] = {
+      (i +: js).toStream.filter((x: Int) => x >= 0 && x < subexprs.size)
+    }
+  }
+
+  /** Selects the children in the given range. `0`-indexed. */
+  def children(range: Range): Selector = new Selector {
+    def select(expr: Expr, subexprs: Seq[Expr]): Stream[Int] = {
+      range.toStream.filter((x: Int) => x >= 0 && x < subexprs.size)
+    }
+  }
+
+  /** Predicate on expressions. Used within the context of `Path`s. */
   sealed trait Descriptor {
     def describes(expr: Expr): Boolean
 
@@ -75,19 +86,26 @@ trait Paths { self: Theory =>
     }
   }
 
+  /** Describes all expressions of the given type `T`. */
   def is[T <: Expr](implicit ct: ClassTag[T]): Descriptor = new Descriptor {
     def describes(expr: Expr): Boolean = ct.runtimeClass.isInstance(expr)
   }
 
-  def is(x: Expr): Descriptor = new Descriptor {
-    def describes(expr: Expr): Boolean = x == expr
+  /** Describes the expression `expr`. */
+  def is(expr: Expr): Descriptor = new Descriptor {
+    def describes(e: Expr): Boolean = expr == e
   }
 
+  /** Describes a path within an expression. */
   sealed trait Path {
 
+    /** The prefix of the path. */
     protected val previous: Option[Path]
+
+    /** The stream of focuses described by the path. */
     protected def focuses(expr: Expr): Stream[Focus] 
 
+    /** Applies a path to an expression. */
     def on(expression: Expr): Stream[Focus] = {
 
       previous match {
@@ -105,6 +123,7 @@ trait Paths { self: Theory =>
       }
     }
 
+    /** Describes which branches to match in the next level. */
     def ~(descriptor: Descriptor): Path = {
       val thiz = this
 
@@ -129,6 +148,7 @@ trait Paths { self: Theory =>
       }
     }
 
+    /** Selects which branches to match in the next level. */
     def ~(selector: Selector): Path = {
       val thiz = this
 
@@ -149,6 +169,7 @@ trait Paths { self: Theory =>
       }
     }
 
+    /** Describes all expressions to match, at any depth. */
     def ~~(descriptor: Descriptor): Path = {
       val thiz = this
 
@@ -183,6 +204,7 @@ trait Paths { self: Theory =>
       }
     }
 
+    /** Selects a specified alternative. */
     def |(index: Int): Path = {
       val thiz = this
 
@@ -194,8 +216,22 @@ trait Paths { self: Theory =>
         }
       }
     }
+
+    /** Selects only paths that end on expressions satisfying the descriptor. */
+    def |(descriptor: Descriptor): Path = {
+      val thiz = this
+
+      new Path {
+        protected override val previous = thiz.previous
+
+        protected override def focuses(expr: Expr): Stream[Focus] = {
+          thiz.focuses(expr).filter((f: Focus) => descriptor.describes(f.get))
+        }
+      }
+    }
   }
 
+  /** Matches to entirety of an expression. */
   lazy val root = new Path {
 
     protected override val previous: Option[Path] = None
