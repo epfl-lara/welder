@@ -358,12 +358,13 @@ trait Rules { self: Theory =>
    *
    * @param equality A proven equality between two expressions.
    * @param context  A context in which to embed the two expressions.
-   * @return The equality of both expressions within context, or `None`.
+   * @return The equality of both expressions within context.
    */
   def congruence(equality: Theorem)(context: Expr => Expr): Attempt[Theorem] = 
     equality.expression match {
       case Equals(a, b) => {
-        // This should be the case since theorems can only hold boolean expressions.
+        // This should be the case since theorems can only hold
+        // well-typed boolean expressions.
         require(a.getType == b.getType && a.getType != Untyped)
 
         val f = freeze(a.getType, context)
@@ -381,6 +382,17 @@ trait Rules { self: Theory =>
       case _ => Attempt.fail("Can not apply congruence, expected equality, received " + equality.expression + ".")
     }
 
+  /** Congruence.
+   *
+   * Replaces, within a proven `statement`, the expression pointed by `path`
+   * by the `replacement`, given that a proof that the two expressions are equal.
+   *
+   * @param statement     A proven statement.
+   * @param path          A path describing which part of the statement to modify.
+   * @param replacement   The expression to plug into the statement.
+   * @param equalityProof Proof that both expressions are equal.
+   * @return The statement with the replacement expressions plugged in.
+   */
   def congruence(statement: Theorem, path: Path, replacement: Expr)
       (equalityProof: Goal => Attempt[Witness]): Attempt[Theorem] = {
 
