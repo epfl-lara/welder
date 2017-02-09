@@ -5,8 +5,8 @@ Welder Internals
 In this file, we expose some of the implementation details of the library.
 This documentation is intended for people wishing to contribute to the library.
 
-Scoping `Theorem`s 
-==================
+Scoping Theorems 
+================
 
 Some functions, such as `implI`, make it possible to obtain a `Theorem` for any given property.
 The catch is that those `Theorems` are supposed to be used only within a certain scope.
@@ -53,6 +53,7 @@ This is done using the `from` method on `Theorem`.
 The method `unmark` can be used to remove some of the markings from a `Theorem`.
 
 To showcase how markings are used, here is, in essence, how the `implI` method is implemented:
+
 ```scala
 def implI(assumption: Expr)(conclusion: Theorem => Attempt[Theorem]): Attempt[Theorem] = {
 
