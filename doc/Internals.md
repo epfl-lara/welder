@@ -69,3 +69,41 @@ def implI(assumption: Expr)(conclusion: Theorem => Attempt[Theorem]): Attempt[Th
 
 To verify that a `Theorem` is valid in the global scope, the `isGloballyValid` method should be used.
 It checks that the `Theorem` is not tainted by any markings.
+
+Freezing Expression Functions
+=============================
+
+Some functions, such as `congruence`, `naturalInduction` or `structuralInduction` accept as argument function of the type `Expr => Expr`.
+In each case, the goal is to allow users of the library to easily specify some sort of *context* or a property.
+
+Take for instance the method `congruence`, which is used to derive the equality of two expressions within the *same context* given the equality of the two expressions. The context in this case is specified using a function of the type `Expr => Expr`.
+
+If nothing is done, the use of the function type `Expr => Expr` is very problematic. Indeed, nothing would stop users from providing ill-behaved functions.
+
+```scala
+var i: BigInt = 0
+
+// Returns a different IntegerLiteral each time it is called. 
+def illBehaved(expr: Expr): Expr = {
+  i += 1
+  
+  IntegerLiteral(i)
+}
+
+// Contains the theorem `true == true`.
+val trueIsTrue = reflexivity(BooleanLiteral(true))
+
+// Would return the theorem `1 == 2` if nothing was done.
+congruence(trueIsTrue)(illBehaved)
+```
+
+To ensure that this does not happen, the library *freezes* all the parameter functions of those methods using the `freeze` function. The `freeze` function applies its argument, only once, to a fresh `Variable`. All calls to the frozen function are then resolved using variable substitution.
+
+```scala
+val frozen = freeze(BooleanType, illBehaved)
+
+frozen(BooleanLiteral(true)) // Returns `IntegerLiteral(1)`.
+frozen(BooleanLiteral(true)) // Also returns `IntegerLiteral(1)`.
+```
+
+When debugging is enabled, we also issue a warning when the frozen function returns a different value than the original function.
