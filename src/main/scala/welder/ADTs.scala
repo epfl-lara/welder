@@ -2,6 +2,8 @@
 
 package welder
 
+import inox.Identifier
+
 /** Contains methods related to algebraic data types. */
 trait ADTs { self: Theory =>
 
@@ -9,30 +11,56 @@ trait ADTs { self: Theory =>
 
   /** Contains all induction hypotheses for structural induction. */
   trait StructuralInductionHypotheses {
+    val constructor: Identifier
     val expression: Expr
-    def hypothesis(expr: Expr): Attempt[Theorem]
+    def hypothesis(expr: Expr): Option[Theorem]
+    val variables: Seq[Variable]
   }
 
-  /** Proves that a property holds on all values of a given type by structural induction.
+  /** Extractor for constructors. */
+  object Constructor {
+    def unapplySeq(expr: Expr): Option[(Identifier, Seq[Expr])] = expr match {
+      case ADT(adt, exprs) => Some((adt.id, exprs))
+      case _ => None
+    }
+  }
+
+  /** Proves that a property holds on all values of a ADT by structural induction.
    *
    * @param property The property to be proven.
-   * @param tpe      The type of expressions for which the property should hold.
-   *                 Typically an `ADTType`. Also supports `TupleType`s.
+   * @param tpe      The type of ADTs for which the property should hold.
    * @param cases    Proof for each of the cases.
    * @return A forall-quantified theorem, stating that the property holds for all
    *         expressions of the type `tpe`.
    */
-  def structuralInduction[T <: Type](
-      property: Expr => Expr,
-      tpe: T,
-      cases: (StructuralInductionHypotheses, Goal) => Attempt[Witness])
-      (implicit fd: FinitelyDeconstructable[T]): Attempt[Theorem] = {
+  def structuralInduction(property: Expr => Expr, tpe: ADTType)
+      (cases: (StructuralInductionHypotheses, Goal) => Attempt[Witness]): Attempt[Theorem] = {
 
     val p = freeze(tpe, property)
 
-    val attempts = fd.cases(tpe) map { case (expr, variables) =>
+    val allCases = {
 
-      val variablesSet = variables.toSet
+      val constructors = tpe.getADT match {
+        case sort: TypedADTSort => sort.constructors
+        case cons: TypedADTConstructor => Seq(cons)
+      }
+
+      constructors map { (constructor: TypedADTConstructor) =>
+        val variables = constructor.fields map { (field: ValDef) =>
+          val name = field.toVariable.id.name
+          Variable.fresh(name, field.tpe)
+        }
+
+        val expr = ADT(constructor.toType, variables)
+
+        (expr, variables, constructor.definition.id)
+      }
+    }
+
+
+    val attempts = allCases map { case (expr, vars, constructorId) =>
+
+      val variablesSet = vars.toSet
 
       def isInnerOrSelf(inner: Expr): Boolean = inner == expr || isInner(inner)
 
@@ -47,15 +75,17 @@ trait ADTs { self: Theory =>
       val marking = Mark.fresh
 
       val struct = new StructuralInductionHypotheses {
+        val constructor = constructorId
         val expression = expr
         def hypothesis(expr: Expr) = {
           if (expr.getType == tpe && isInner(expr)) {
-            Attempt.success(new Theorem(p(expr)).mark(marking))
+            Some(new Theorem(p(expr)).mark(marking))
           }
           else {
-            Attempt.fail("Could not apply induction hypothesis on " + expr)
+            None
           }
         }
+        val variables = vars
       }
 
       val goal = new Goal(p(expr))

@@ -2,14 +2,17 @@
 
 package welder
 
+import inox.Identifier
+
 trait Deconstructions { self: Theory =>
   
   import program.trees._
 
   sealed trait FinitelyDeconstructable[T <: Type] {
     type Expression <: Expr
+    type Constructor
 
-    def cases(tpe: T): Seq[(Expression, Seq[Variable])]
+    def cases(tpe: T): Seq[(Constructor, Expression, Seq[Variable])]
   }
 
   // implicit object BooleanDeconstructable extends FinitelyDeconstructable[BooleanType.type] {
@@ -43,8 +46,9 @@ trait Deconstructions { self: Theory =>
 
   implicit object ADTDeconstructable extends FinitelyDeconstructable[ADTType] {
     type Expression = ADT
+    type Constructor = Identifier
 
-    def cases(tpe: ADTType): Seq[(Expression, Seq[Variable])] = {
+    def cases(tpe: ADTType): Seq[(Constructor, Expression, Seq[Variable])] = {
 
       val constructors = tpe.getADT match {
         case sort: TypedADTSort => sort.constructors
@@ -59,7 +63,7 @@ trait Deconstructions { self: Theory =>
 
         val expr = ADT(constructor.toType, variables)
 
-        (expr, variables)
+        (constructor.definition.id, expr, variables)
       }
     }
   }
@@ -67,8 +71,9 @@ trait Deconstructions { self: Theory =>
   implicit object TupleDeconstructable extends FinitelyDeconstructable[TupleType] {
 
     type Expression = Tuple
+    type Constructor = Unit
 
-    def cases(tpe: TupleType): Seq[(Expression, Seq[Variable])] = Seq {
+    def cases(tpe: TupleType): Seq[(Constructor, Expression, Seq[Variable])] = Seq {
       val variables = tpe.bases.zipWithIndex map { case (inner: Type, index: Int) =>
         val name = "t_" + index.toString
         Variable.fresh(name, inner)
@@ -76,7 +81,7 @@ trait Deconstructions { self: Theory =>
 
       val expr = Tuple(variables)
 
-      (expr, variables)
+      ((), expr, variables)
     }
   }
 }
