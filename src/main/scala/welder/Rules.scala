@@ -169,7 +169,7 @@ trait Rules { self: Theory =>
    */
   def implI(assumption: Expr)(conclusion: Theorem => Attempt[Theorem]): Attempt[Theorem] = {
     
-    if (assumption.getType != BooleanLiteral) {
+    if (assumption.getType != BooleanType) {
       return Attempt.fail("Passed non-boolean expression " + assumption + " to implI.")
     }
 
