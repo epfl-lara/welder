@@ -218,6 +218,24 @@ trait Rules { self: Theory =>
       case _ => Attempt.fail("Could not apply rule implE on non-implication expression " + implication.expression + ".")
     }
 
+  def forallI(name: String, tpe: Type)(theorem: Variable => Attempt[Theorem]): Attempt[Theorem] = {
+    val x = Variable.fresh(name, tpe)
+
+    theorem(x) map { (thm: Theorem) =>
+      new Theorem(Forall(Seq(x.toVal), thm.expression)).from(thm)
+    }
+  }
+
+  def forallI(vars: Seq[(String, Type)])(theorem: Seq[Variable] => Attempt[Theorem]): Attempt[Theorem] = {
+    val vs = vars.map {
+      case (name, tpe) => Variable.fresh(name, tpe)
+    }
+
+    theorem(vs) map { (thm: Theorem) =>
+      new Theorem(Forall(vs.map(_.toVal), thm.expression)).from(thm)
+    }
+  }
+
   def forallI(tpe: Type, theorem: Theorem): Theorem = {
     val x = Variable.fresh("x", tpe)
 
@@ -344,6 +362,14 @@ trait Rules { self: Theory =>
    * Contains the `Theorem` : `true`.
    */
   lazy val truth: Theorem = new Theorem(BooleanLiteral(true))
+
+  lazy val absurd: Theorem = {
+
+    // We purposely ignore the mark. The Theorem will never be globally valid. 
+    val (thm, _) = new Theorem(BooleanLiteral(false)).mark
+
+    thm
+  }
 
   lazy val excludedMiddle: Theorem = {
     val x = Variable.fresh("x", BooleanType)
