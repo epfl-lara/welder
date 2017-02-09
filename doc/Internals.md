@@ -55,14 +55,19 @@ The method `unmark` can be used to remove some of the markings from a `Theorem`.
 To showcase how markings are used, here is, in essence, how the `implI` method is implemented:
 
 ```scala
-def implI(assumption: Expr)(conclusion: Theorem => Attempt[Theorem]): Attempt[Theorem] = {
+def implI(assumption: Expr)(conclusion: Theorem => Attempt[Theorem]) = {
 
-  val (hypothesis, mark) = new Theorem(assumption).mark  // Here, we mark the `Theorem`.
+  // Here, we mark the `Theorem`.
+  val (hypothesis, mark) = new Theorem(assumption).mark
 
-  conclusion(hypothesis) map {
-    // We create a new `Theorem` from the result, and indicate that it depends on `thm` using `from`.
-    // We then remove the mark related to the `hypothesis`. The resulting `Theorem` does not depend on it. 
-    (thm: Theorem) => new Theorem(Implies(assumption, thm.expression)).from(thm).unmark(mark)
+  conclusion(hypothesis) map { (thm: Theorem) => 
+    // We create a new `Theorem` for the implication,
+    // and indicate that it depends on `thm` using `from`.
+    // We then remove the mark related to the `hypothesis`.
+    // The resulting `Theorem` does not depend on it. 
+    new Theorem(Implies(assumption, thm.expression))
+        .from(thm)
+        .unmark(mark)
   }
 }
 ```
