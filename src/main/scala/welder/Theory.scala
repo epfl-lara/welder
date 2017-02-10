@@ -87,7 +87,8 @@ trait Theory
       }
     }
 
-    override def toString(): String = "Theorem(" + expression.toString() + ")"
+    override def toString(): String = 
+      "Theorem" + (if (isGloballyValid) "" else "*") + "(" + expression.toString() + ")"
 
     /** Checks if this `Theorem` is valid in the global scope. */
     def isGloballyValid: Boolean = markings.isEmpty
