@@ -179,6 +179,7 @@ trait Theory
   case class TypeError(name: String, tpe: Type)
     extends FailureReason("Operation " + name + " not supported for type " + tpe + ".")
   case class Unspecified(text: String) extends FailureReason(text)
+  case class Aborted(text: String) extends FailureReason(text)
 
 
   // TODO: Record counter-examples.
@@ -206,6 +207,7 @@ trait Theory
 
   object Attempt {
     def fail(msg: String) = Failure(Unspecified(msg))
+    def abort(msg: String) = Failure(Aborted(msg))
     def typeError(operation: String, tpe: Type) = Failure(TypeError(operation, tpe))
     def incorrectWitness = Failure(IncorrectWitness)
     def success[A](x: A) = Success(x)
