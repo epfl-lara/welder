@@ -27,6 +27,22 @@ trait ADTs { self: Theory =>
 
   /** Proves that a property holds on all values of a ADT by structural induction.
    *
+   * @param property The property to be proven. Should be forall-quantified.
+   * @param tpe      The type of ADTs for which the property should hold.
+   * @param cases    Proof for each of the cases.
+   * @return A forall-quantified theorem, stating that the property holds for all
+   *         expressions of the type `tpe`.
+   */
+  def structuralInduction(property: Expr, tpe: ADTType)
+      (cases: (StructuralInductionHypotheses, Goal) => Attempt[Witness]): Attempt[Theorem] = {
+
+    forallToPredicate(property, tpe) flatMap { (f: Expr => Expr) => 
+      structuralInduction(f(_), tpe)(cases)
+    }
+  }
+
+  /** Proves that a property holds on all values of a ADT by structural induction.
+   *
    * @param property The property to be proven.
    * @param tpe      The type of ADTs for which the property should hold.
    * @param cases    Proof for each of the cases.

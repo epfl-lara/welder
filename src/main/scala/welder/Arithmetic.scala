@@ -104,7 +104,7 @@ trait Arithmetic { self: Theory =>
   /** Tries to prove a property by natural induction.
    *
    * @param property      The property to be proved.
-   * @param base          The base expression. Should be of type IntegerType. Typically `0` or `1`.
+   * @param base          The base expression. Should be of type `IntegerType`. Typically `0` or `1`.
    * @param baseCase      Proof that the property holds in the base case.
    * @param inductiveCase Proof that the property holds in the inductive case,
    *                      assuming all induction hypotheses.
@@ -112,7 +112,7 @@ trait Arithmetic { self: Theory =>
    */
   def naturalInduction(property: Expr => Expr, base: Expr, baseCase: Goal => Attempt[Witness])
       (inductiveCase: (NaturalInductionHypotheses, Goal) => Attempt[Witness]): Attempt[Theorem] = {
-
+    
     if (base.getType != IntegerType) {
       return Attempt.typeError("naturalInduction", base.getType)
     }
@@ -161,6 +161,25 @@ trait Arithmetic { self: Theory =>
           }
         }
       }
+    }
+  }
+
+
+
+  /** Tries to prove a property by natural induction.
+   *
+   * @param property      The property to be proved. Should be of the type `∀ n: BigInt. ...`.
+   * @param base          The base expression. Should be of type `IntegerType`. Typically `0` or `1`.
+   * @param baseCase      Proof that the property holds in the base case.
+   * @param inductiveCase Proof that the property holds in the inductive case,
+   *                      assuming all induction hypotheses.
+   * @return A forall-quantified theorem of the property.
+   */
+  def naturalInduction(property: Expr, base: Expr, baseCase: Goal => Attempt[Witness])
+      (inductiveCase: (NaturalInductionHypotheses, Goal) => Attempt[Witness]): Attempt[Theorem] = {
+
+    forallToPredicate(property, IntegerType) flatMap { (f: Expr => Expr) =>
+      naturalInduction(f, base, baseCase)(inductiveCase)
     }
   }
 }

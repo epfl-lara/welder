@@ -61,7 +61,7 @@ class MarkingsSuite extends FunSuite {
 
     def property(x: Expr) = GreaterEquals(x, IntegerLiteral(0))
 
-    val legal = naturalInduction(property, IntegerLiteral(0), _.trivial) { case (ihs, goal) =>
+    val legal = naturalInduction(property(_), IntegerLiteral(0), _.trivial) { case (ihs, goal) =>
 
       // Save the induction hypotheses.
       illegal1 = ihs.variableGreaterThanBase
@@ -83,7 +83,7 @@ class MarkingsSuite extends FunSuite {
 
     def property(x: Expr) = Equals(x, x)
 
-    val legal = structuralInduction(property, ADTType(list, Seq(IntegerType))) { case (ihs, goal) =>
+    val legal = structuralInduction(property(_), ADTType(list, Seq(IntegerType))) { case (ihs, goal) =>
       ihs.expression match {
         case Constructor(name, head, tail) if name == cons => {
 

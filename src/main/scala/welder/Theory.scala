@@ -216,4 +216,15 @@ trait Theory
     case Success(x) => x
     case Failure(msg) => program.ctx.reporter.fatalError(msg)
   }
+
+
+  def forallToPredicate(x: Expr, tpe: Type): Attempt[Expr => Expr] = x match {
+    case Forall(Seq(n), e) if n.tpe == tpe => Attempt.success { (expr: Expr) => 
+      exprOps.replaceFromSymbols(Map((n -> expr)), e)
+    }
+    case Forall(ns, e) if ns(0).tpe == tpe => Attempt.success { (expr: Expr) => 
+      exprOps.replaceFromSymbols(Map((ns(0) -> expr)), Forall(ns.tail, e))
+    }
+    case _ => Attempt.fail("Could not transform expression into predicate.")
+  }
 }

@@ -56,7 +56,7 @@ object SumProgram extends Theory {
 
     // Would be nice to have: e"sum($x) == ($x * ($x + 1)) / 2"
 
-    naturalInduction(property, IntegerLiteral(0), _.trivial) { case (ihs, goal) =>
+    naturalInduction(property(_), IntegerLiteral(0), _.trivial) { case (ihs, goal) =>
 
       val lemma = Equals(
         FunctionInvocation(sum, Seq(), Seq(Plus(ihs.variable, IntegerLiteral(1)))),
