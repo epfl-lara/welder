@@ -5,4 +5,8 @@ package object welder {
   
   case object DebugSectionWelder extends DebugSection("welder")
 
+
+  def theoryOf(pgm: InoxProgram): Theory = new Theory {
+    override val program = pgm
+  }
 } 
