@@ -5,17 +5,16 @@ In this tutorial, we will prove the following formula using Welder:
 
 ![∀ n >= 0. 1 + 2 + ... + n = n * (n + 1) / 2](images/tutorial-formula.png)
 
-We will introduce all concepts needed as we go along.
 This tutorial can be followed along in the Scala interpreter.
 
 #### IMPORTANT NOTE ####
 
-This tutorial assumes a some level of familiarity with Inox. If you are unfamiliar with it, we encourage you to check out the [Inox tutorial](https://github.com/epfl-lara/inox/blob/master/doc/tutorial.md) before you dive in Welder!
+This tutorial assumes some level of familiarity with Inox. If you are unfamiliar with it, we strongly advise you to check the [Inox tutorial](https://github.com/epfl-lara/inox/blob/master/doc/tutorial.md) before you dive into this one!
 
 Definition of the sum function
 ------------------------------
 
-The first step is to define a program containing the sum function. To do so, we use Inox directly. If you are familiar with Inox, nothing new for you here!
+Our first step is to define the sum function, and package it into program. To do so, we use Inox directly. Since you are already familiar with Inox, there's nothing new for you here!
 
 ```scala
 import inox._
@@ -23,11 +22,12 @@ import inox.trees._
 import inox.trees.dsl._
 
 // We create an identifier for the function.
-val sum: Identifier = FreshIdentifier("sum")
+val sum = FreshIdentifier("sum")
 
 // We define the sum function.
 val sumFunction = mkFunDef(sum)() { case _ =>
-  // The function take only one argument, of type `BigInt`.
+
+  // The function takes only one argument, of type `BigInt`.
   val args: Seq[ValDef] = Seq("n" :: IntegerType)
   
   // It returns a `BigInt`.
@@ -54,13 +54,13 @@ val sumProgram = InoxProgram(Context.empty,
 
 ```
 
-The above code snippet simply defines a program which contains the function `sum`. This function performs the sum of all integers from `0` to its argument. Called on `0`, it simply returns `0`. On values `n` different from `0`, the function recursively calls itself on the value `n - 1` and adds `n` to the result.
+The above code snippet simply defines a program which contains the function `sum`. This function performs the sum of all integers from `0` to its argument `n`. Called on `0`, it simply returns `0`. On values of `n` different from `0`, the function recursively calls itself on `n - 1` and adds `n` to the result.
 
 Importing Welder
 ----------------
 
-Now is time to actually use Welder to prove the property.
-First, we must create a `Theory` over the `sumProgram` we have just defined. For this, we can use the `theoryOf` function.
+Now is time to actually use Welder.
+First, we must create a `Theory` over the `sumProgram` that we have just defined. For this, we can use the `theoryOf` function.
 
 ```scala
 import welder._
@@ -70,8 +70,8 @@ val theory = theoryOf(sumProgram)
 import theory._
 ```
 
-This will import in the scope data types and functions that we can use to
-reason about the program we have just defined.
+The above code snippet will import data types and functions that we can use to
+reason about the `sumProgram` we have just defined.
 
 Main concepts of Welder
 -----------------------
@@ -80,7 +80,7 @@ At this point, we should pause for a moment and introduce some of the concepts t
 
 ### Theorem ###
 
-*The* most important concept of Welder is that of a `Theorem`. Intuitively, a theorem is a simple wrapper around an expression of type `BooleanType`. For instance, the theorem `truth` contains the trivially true expression `true`.
+*The* most important concept of Welder is that of a `Theorem`. A theorem is a simple wrapper around an expression of type `BooleanType`. For instance, the theorem `truth` contains the trivially true expression `true`.
 
 ```
 val myTheorem: Theorem = truth
@@ -89,23 +89,23 @@ println(myTheorem)
 // Theorem(true)
 ```
 
-What is interesting is that, we, as users of Welder, can not build values of type `Theorem` directly. Indeed, the constructor of `Theorem` is private and there is no way around that.
-The flip side is that when we get an actual theorem, we are guaranteed that the expression it contains has been proved to hold in the theory!
+What is interesting is that, we, as users of Welder, **can not build values of type `Theorem` directly**. Indeed, the constructor of `Theorem` is private and there is no way around that.
+The flip side is, when we get a theorem, we are guaranteed that the expression it contains has been proved to hold in the theory!
 
 ### Attempt ###
 
-The `Attempt[T]` data type represents either values of type `T`, or the reason of the failure to get such a value. The data type offers a monadic interface (`map` and `flatMap` functions) and behaves very similarly to `Option[T]`.
+The `Attempt[T]` data type represents either values of type `T`, or the reason of the failure to get such a value. The data type offers a monadic interface (i.e. `map` and `flatMap` functions) and behaves very similarly to `Option[T]`.
 
 Values of type `T` can be implicitly converted to `Attempt[T]`.
-The opposite is also true, values of type `Attempt[T]` will be converted to `T` is needed. This conversion will, however, throw an exception on failure cases.
+The opposite is also true, values of type `Attempt[T]` will be converted to `T` as needed. This conversion will, however, throw an exception on failure cases.
 
 The method `Attempt.abort(message)` can used to abort an attempt.
 
 ### Combinators ###
 
-Since, as we have already discussed, we can not use the constructor of `Theorem` to obtain theorems, we must rely instead on the various functions provided by Welder. As there are many, we will note go through all of them here.
+Since, as we have already discussed, we can not use the constructor of `Theorem`, we must rely instead on the various functions provided by Welder to obtain theorems. As there are many such functions, we will not go through all of them now.
 
-However, one of them is so particularly useful that it is worth mentioning it now. Its name is `prove` and it can be used to feed expressions directly to the underlying SMT-solvers used by Inox.
+However, one of them is so particularly useful that it is worth mentioning it here. Its name is `prove` and it can be used to feed expressions directly to the underlying SMT-solvers used by Inox.
 
 ```
 val expression = (E(BigInt(1)) + E(BigInt(1))) === E(BigInt(2))
@@ -127,11 +127,12 @@ One such function is `implI`, which stands for *implication introduction*. It al
 implI(E(BigInt(1)) === E(BigInt(2))) { (oneIsTwo: Theorem) =>
   
   // `oneIsTwo` is a scoped theorem.
+  // It contains the expression `1 == 2`.
   println(oneIsTwo)
-  
   // Outputs:
   // Theorem*(1 == 2)
   //        ^ Note the star.
+  // It indicates that the theorem is not valid in all scopes.
 
   println(oneIsTwo.isGloballyValid)
   // Outputs:
@@ -146,32 +147,34 @@ implI(E(BigInt(1)) === E(BigInt(2))) { (oneIsTwo: Theorem) =>
 // Success(Theorem((1 == 2) ==> (12 == 17)))
 ```
 
-If a scoped theorem, or any other theorem derived from it, was to escape its scope through the use of mechanisms such as mutable variables or exceptions, it would *never* be globally valid and would taint any theorem derived from it.
+If a scoped theorem, or any other theorem derived from it, was to escape its scope through the use of mechanisms such as mutable variables or exceptions, it would *never* be globally valid and would taint any other theorem derived from it.
 
 ### Goal and Witness ###
 
-Goals are wrapper around boolean expressions. They are never created by you, users of the library, but are often passed as arguments to high order functions. They indicate the current expression to be proven.
+Goals are wrapper around boolean expressions. They are never created by you as a user of the library, but are often passed as arguments to high order functions. They indicate the current expression to be proven.
 For instance, the `notI` function, which stands for *negation introduction*, passes a `Goal` to the contradition function supplied.
 
 ```scala
 def notI(hypothesis: Expr)
         (contradiction: (Theorem, Goal) => Attempt[Witness])
-        : Attempt[Theorem]  //    ^^^^  The goal.
+        : Attempt[Theorem]  //    ^^^^  The goal. An expression to be proved.
 ```
 
 In this case, the goal passed to the contradiction function will contain the boolean literal value `false`. As you may have guessed, the `notI` function allows to make proofs by contradiction.
 
 Witnesses are values that witness the achievement of a `goal`.
-They are obtained using the `goal.by(theorem)` method, which takes a `theorem` as argument. If the theorem implies the goal, a witness will be given. When the goal is trivially true, the method `goal.trivial` can be used as a shortcut.
+They are obtained using the `goal.by(theorem)` method, which takes a `theorem` as argument. If the theorem implies the goal, a witness will be returned. When the goal is trivially true, the method `goal.trivial` can be used as a shortcut.
 
 Now that we have introduces those fundamental concepts, we can get back on track and try to prove the formula we have introduced (way way) earlier!
 
 Definition of the property
 --------------------------
 
-As a remainder, here is the property we want to prove, but this time expressed as a proper expression in our theory.
+As a reminder, here is the property that we want to prove, but this time expressed as a proper expression in our theory.
 
 ```scala
+// Contains the expression:
+// ∀n: BigInt. ((n >= 0) ==> (sum(n) == (n * (n + 1)) / 2))
 val toProve: Expr = forall("n" :: IntegerType) { n => 
     (n >= E(BigInt(0))) ==> {
         E(sum)(n) === (n * (n + E(BigInt(1)))) / E(BigInt(2))
@@ -274,13 +277,6 @@ println(ourTheorem)
 ```
 
 Congratulations! We have just proven our first non-trivial `Theorem` !
-You can check that this indeed implies the expression `toProve` that we had in the beginning:
-
-```scala
-println(prove(toProve, ourTheorem))
-// Outputs:
-// Success(Theorem(∀n$1: BigInt. ((n$1 >= 0) ==> (sum(n$1) == (n$1 * (n$1 + 1)) / 2))))
-```
 
 That's it!
 
