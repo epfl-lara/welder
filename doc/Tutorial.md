@@ -82,7 +82,7 @@ At this point, we should pause for a moment and introduce some of the concepts t
 
 *The* most important concept of Welder is that of a `Theorem`. A theorem is a simple wrapper around an expression of type `BooleanType`. For instance, the theorem `truth` contains the trivially true expression `true`.
 
-```
+```scala
 val myTheorem: Theorem = truth
 println(myTheorem)
 // Outputs:
@@ -107,7 +107,7 @@ Since, as we have already discussed, we can not use the constructor of `Theorem`
 
 However, one of them is so particularly useful that it is worth mentioning it here. Its name is `prove` and it can be used to feed expressions directly to the underlying SMT-solvers used by Inox.
 
-```
+```scala
 val expression = (E(BigInt(1)) + E(BigInt(1))) === E(BigInt(2))
 prove(expression)
 // Returns:
