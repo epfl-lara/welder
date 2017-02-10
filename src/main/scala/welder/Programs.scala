@@ -28,7 +28,7 @@ object ListProgram extends Theory {
   override val program = InoxProgram(Context.empty, NoSymbols.withADTs(Seq(listSort, consConstructor, nilConstructor)))
 }
 
-object SumProgram extends Theory {
+object SumProgram {
 
   val sum: Identifier = FreshIdentifier("sum")
 
@@ -46,8 +46,9 @@ object SumProgram extends Theory {
     (args, retType, body)
   }
 
-  override val program = InoxProgram(Context.empty, NoSymbols.withFunctions(Seq(sumFunction)))
-
+  val program = InoxProgram(Context.empty, NoSymbols.withFunctions(Seq(sumFunction)))
+  val theory = theoryOf(program)
+  import theory._
 
   lazy val proofGauss: Theorem = {
     def property(x: Expr) = Equals(
