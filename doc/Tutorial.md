@@ -138,7 +138,7 @@ Its arguments are:
 
 The return value of the function will be, if successful, a `Theorem` stating that the `property` holds for all integers greater or equal to the `base`. This is exactly what is needed in our case!
 
-We can thus use the method with as follows:
+We can thus use the method as follows:
 
 ```scala
 // The property we want to prove, as a function of `n`.
