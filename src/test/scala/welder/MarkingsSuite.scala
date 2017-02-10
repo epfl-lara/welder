@@ -81,7 +81,7 @@ class MarkingsSuite extends FunSuite {
 
     var illegal: Theorem = null
 
-    def property(x: Expr) = And(BooleanLiteral(true), Equals(x, x))
+    def property(x: Expr) = Equals(x, x)
 
     val legal = structuralInduction(property, ADTType(list, Seq(IntegerType))) { case (ihs, goal) =>
       ihs.expression match {
@@ -89,7 +89,7 @@ class MarkingsSuite extends FunSuite {
 
           // Save the induction hypothesis.
           illegal = ihs.hypothesis(tail).get
-          
+
           goal.trivial
         }
         case Constructor(name) if name == nil => {
