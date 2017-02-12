@@ -33,7 +33,7 @@ val sumFunction = mkFunDef(sum)() { case _ =>
   // It returns a `BigInt`.
   val retType: Type = IntegerType
   
-  // It's body is defined as:
+  // Its body is defined as:
   val body: Seq[Variable] => Expr = { case Seq(n) =>
     if_ (n === E(BigInt(0))) {
       // We return `0` if the argument is `0`.
