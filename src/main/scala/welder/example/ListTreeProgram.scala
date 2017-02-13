@@ -123,17 +123,32 @@ object ListTreeProgram {
   val tA = IntegerType
   val tB = IntegerType
 
-  def mapCommutes(t: Expr) = forall("f" :: (tA =>: tB)) { case (f) => 
-    E(toList)(tB)(E(treeMap)(tA, tB)(t, f)) === E(listMap)(tA, tB)(E(toList)(tA)(t), f) 
+  lazy val mapCommutesWithConcatenate = forallI("f" :: (tA =>: tB), "bs" :: T(list)(tA)) { case Seq(f, bs) =>
+    def mapCommutes(as: Expr) =
+      E(listMap)(tA, tB)(E(concatenate)(tA)(as, bs), f) ===
+      E(concatenate)(tB)(E(listMap)(tA, tB)(as, f), E(listMap)(tA, tB)(bs, f))
+
+    structuralInduction(mapCommutes _, T(list)(tA)) { case (ihs, goal) =>
+      ihs.expression match {
+        case C(`cons`, x, xs) => goal.by(ihs.hypothesis(xs))
+        case C(`nil`) => goal.trivial
+      }
+    } 
   }
 
-  lazy val mapCommutesThm = structuralInduction(mapCommutes _, T(tree)(tA)) { case (ihs, goal) =>
-    ihs.expression match {
-      case C(`branch`, left, right) => {
+  lazy val mapCommutesWithToList = forallI("f" :: (tA =>: tB)) { case f => 
 
-        goal.by(andI(ihs.hypothesis(left), ihs.hypothesis(right)))
+    def mapCommutes(t: Expr) =
+      E(toList)(tB)(E(treeMap)(tA, tB)(t, f)) ===
+      E(listMap)(tA, tB)(E(toList)(tA)(t), f) 
+
+    structuralInduction(mapCommutes _, T(tree)(tA)) { case (ihs, goal) =>
+      ihs.expression match {
+        case C(`branch`, l, r) => {
+          goal.by(andI(ihs.hypothesis(l), ihs.hypothesis(r), mapCommutesWithConcatenate))
+        }
+        case C(`leaf`, _) => goal.trivial
       }
-      case C(`leaf`, value) => goal.trivial
     }
   }
 }
