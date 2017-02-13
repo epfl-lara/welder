@@ -60,7 +60,7 @@ trait Solvers { self: Theory =>
         Attempt.success(new Theorem(expr).from(assumptions))
       }
       else {
-        Attempt.fail("SMT solver could not prove the property: " + expr + ".")
+        Attempt.fail("SMT solver could not prove the property: " + expr + ", from hypotheses: " + hypotheses.mkString(", ") + ".")
       }
     }
   }
