@@ -18,7 +18,7 @@ trait ADTs { self: Theory =>
   }
 
   /** Extractor for constructors. */
-  object Constructor {
+  object C {
     def unapplySeq(expr: Expr): Option[(Identifier, Seq[Expr])] = expr match {
       case ADT(adt, exprs) => Some((adt.id, exprs))
       case _ => None
