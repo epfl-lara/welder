@@ -17,14 +17,6 @@ trait ADTs { self: Theory =>
     val variables: Seq[Variable]
   }
 
-  /** Extractor for constructors. */
-  object C {
-    def unapplySeq(expr: Expr): Option[(Identifier, Seq[Expr])] = expr match {
-      case ADT(adt, exprs) => Some((adt.id, exprs))
-      case _ => None
-    }
-  }
-
   /** Proves that a property holds on all values of a ADT by structural induction.
    *
    * @param property The property to be proven. Should be forall-quantified.
