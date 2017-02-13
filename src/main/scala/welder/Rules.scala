@@ -221,10 +221,22 @@ trait Rules { self: Theory =>
     }
 
   def forallI(name: String, tpe: Type)(theorem: Variable => Attempt[Theorem]): Attempt[Theorem] = {
-    val x = Variable.fresh(name, tpe)
+    forallI(Variable.fresh(name, tpe).toVal)(theorem)
+  }
 
-    theorem(x) map { (thm: Theorem) =>
-      new Theorem(Forall(Seq(x.toVal), thm.expression)).from(thm)
+  def forallI(vd: ValDef)(theorem: Variable => Attempt[Theorem]): Attempt[Theorem] = {
+
+    theorem(vd.toVariable) map { (thm: Theorem) =>
+      new Theorem(Forall(Seq(vd), thm.expression)).from(thm)
+    }
+  }
+
+  def forallI(first: ValDef, rest: ValDef*)(theorem: Seq[Variable] => Attempt[Theorem]): Attempt[Theorem] = {
+
+    val vds = first +: rest
+
+    theorem(vds.map(_.toVariable)) map { (thm: Theorem) =>
+      new Theorem(Forall(vds, thm.expression)).from(thm)
     }
   }
 
