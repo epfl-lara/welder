@@ -13,7 +13,7 @@ trait ADTs { self: Theory =>
   trait StructuralInductionHypotheses {
     val constructor: Identifier
     val expression: Expr
-    def hypothesis(expr: Expr): Option[Theorem]
+    def hypothesis(expr: Expr): Attempt[Theorem]
     val variables: Seq[Variable]
   }
 
@@ -95,10 +95,10 @@ trait ADTs { self: Theory =>
         val expression = expr
         def hypothesis(expr: Expr) = {
           if (expr.getType == tpe && isInner(expr)) {
-            Some(new Theorem(p(expr)).mark(marking))
+            Attempt.success(new Theorem(p(expr)).mark(marking))
           }
           else {
-            None
+            Attempt.fail("No induction hypothesis available for " + expr + ".")
           }
         }
         val variables = vars
