@@ -11,6 +11,7 @@ import inox.trees._
 trait Theory
   extends ADTs
      with Arithmetic
+     with Equational
      with Evaluators
      with Paths
      with Rules
