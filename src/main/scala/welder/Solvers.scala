@@ -48,7 +48,7 @@ trait Solvers { self: Theory =>
 
       program.ctx.reporter.debug(negation)
 
-      val solver = factory.getNewSolver.setTimeout(60000L)
+      val solver = factory.getNewSolver.setTimeout(5000L)
       solver.assertCnstr(negation)
       val result = solver.check(SolverResponses.Model) // TODO: What to do with models?
 
