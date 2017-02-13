@@ -114,6 +114,16 @@ trait Rules { self: Theory =>
     }
   } 
 
+  /** Proves the disjunction of a sequence of expressions by proving at least one of the cases.
+   *
+   * @param first The first disjunct.
+   * @param rest  The rest of the disjuncts.
+   * @param cases Proof function, applied to each disjunct separately.
+   * @return A `Theorem` for the disjunction.
+   */
+  def orI(first: Expr, rest: Expr*)(cases: Goal => Attempt[Witness]): Attempt[Theorem] =
+    orI(first +: rest)(cases)
+
   /** Proves an expression using case analysis on a proven disjunction.
    *
    * @param disjunction A proven disjunction.
