@@ -116,17 +116,9 @@ trait ADTs { self: Theory =>
       }
     }
 
-    if (attempts.exists(!_.isSuccessful)) {
-      Attempt.fail("Some of the cases failed during structural induction.")
-    }
-    else {
-      val theorems = attempts.map(_.get)
-
+    Attempt.all(attempts) map { (theorems: Seq[Theorem]) =>
       val x = Variable.fresh("x", tpe)
-      val conclusion = new Theorem(Forall(Seq(x.toVal), p(x))).from(theorems)
-
-      Attempt.success(conclusion)
+      new Theorem(Forall(Seq(x.toVal), p(x))).from(theorems)
     }
   }
-  
 }

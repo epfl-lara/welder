@@ -174,12 +174,24 @@ trait Theory
     }
   }
 
-  sealed abstract class FailureReason(val reason: String)
+  sealed abstract class FailureReason(val reason: String) {
+    val underlying: Seq[FailureReason] = Seq()
+  }
   case object IncorrectWitness extends FailureReason("Returned an incorrect witness.")
   case class TypeError(name: String, tpe: Type)
     extends FailureReason("Operation " + name + " not supported for type " + tpe + ".")
   case class Unspecified(text: String) extends FailureReason(text)
   case class Aborted(text: String) extends FailureReason(text)
+  case class AllOfFailureReasons(reasons: Seq[FailureReason])
+    extends FailureReason("Failed due to multiple reasons: ") {
+
+    override val underlying = reasons
+  }
+  case class OneOfFailureReasons(reasons: Seq[FailureReason])
+    extends FailureReason("Failed due to one of the following reasons: ") {
+
+    override val underlying = reasons
+  }
 
 
   // TODO: Record counter-examples.
@@ -211,6 +223,30 @@ trait Theory
     def typeError(operation: String, tpe: Type) = Failure(TypeError(operation, tpe))
     def incorrectWitness = Failure(IncorrectWitness)
     def success[A](x: A) = Success(x)
+
+    def all[A](as: Seq[Attempt[A]]): Attempt[Seq[A]] = {
+      if (as.exists(!_.isSuccessful)) {
+        Failure(AllOfFailureReasons(as.collect {
+          case Failure(reason) => reason
+        }))
+      }
+      else {
+        Success(as.map(_.get))
+      }
+    }
+
+    def atLeastOne[A](as: Seq[Attempt[A]]): Attempt[Seq[A]] = {
+      if (!as.exists(_.isSuccessful)) {
+        Failure(OneOfFailureReasons(as.collect {
+          case Failure(reason) => reason
+        }))
+      }
+      else {
+        Success(as.collect {
+          case Success(v) => v
+        })
+      }
+    }
   }
 
   implicit def valueToAttempt[A](value: A): Attempt[A] = Attempt.success(value)

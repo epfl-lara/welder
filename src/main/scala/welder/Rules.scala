@@ -104,13 +104,8 @@ trait Rules { self: Theory =>
       }
     }
 
-    if (!attempts.exists(_.isSuccessful)) {
-      Attempt.fail("Not a single case could be proven.")
-    }
-    else {
-      val successfulTheorems = attempts.filter(_.isSuccessful).map(_.get)
-
-      Attempt.success(new Theorem(Or(expressions)).from(successfulTheorems))
+    Attempt.atLeastOne(attempts) map { (successfulTheorems: Seq[Theorem]) =>
+      new Theorem(Or(expressions)).from(successfulTheorems)
     }
   } 
 
@@ -148,11 +143,8 @@ trait Rules { self: Theory =>
           }
         }
 
-        if (attempts.exists(!_.isSuccessful)) {
-          Attempt.fail("Could not prove all cases in orE.")
-        }
-        else {
-          Attempt.success(new Theorem(conclusion).from(attempts.map(_.get)))
+        Attempt.all(attempts) map { (theorems: Seq[Theorem]) =>
+          new Theorem(conclusion).from(theorems)
         }
       }
       case _ => Attempt.fail("Can not apply rule orE on non-disjunction expression " + disjunction.expression + ".")
