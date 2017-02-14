@@ -121,15 +121,13 @@ object ListTreeProgram {
     val args: Seq[ValDef] = Seq("xs" :: T(list)(tpe), "f" :: ((tpe, tpe) =>: tpe))
     val retType: Type = tpe
     val body: Seq[Variable] => Expr = { case Seq(xs, f) =>
-      Assume(xs.isInstOf(T(cons)(tpe)), {
-        let ("cXs" :: T(cons)(tpe), xs.asInstOf(T(cons)(tpe))) { case cXs =>
-          if_ (cXs.getField(tail).isInstOf(T(nil)(tpe))) {
-            cXs.getField(head)
-          } else_ {
-            f(cXs.getField(head), E(listFold)(tpe)(cXs.getField(tail), f))
-          }
+      let ("cXs" :: T(cons)(tpe), xs.asInstOf(T(cons)(tpe))) { case cXs =>
+        if_ (cXs.getField(tail).isInstOf(T(nil)(tpe))) {
+          cXs.getField(head)
+        } else_ {
+          f(cXs.getField(head), E(listFold)(tpe)(cXs.getField(tail), f))
         }
-      })
+      }
     }
 
     (args, retType, body)
@@ -223,10 +221,10 @@ object ListTreeProgram {
           ihs.expression match {
             case C(`cons`, h, t) => {
 
-              val tIsNonEmptyCase = implI(t.isInstOf(T(cons)(tA))) { (tNonEmpty: Theorem) =>
-                
+              val tIsNonEmptyCase: Theorem = implI(t.isInstOf(T(cons)(tA))) { (tNonEmpty: Theorem) =>
+
                 lhs(ihs.expression)                                           ==| 
-                                                                    (_.trivial) |
+                                                                     ysNonEmpty |
                 E(listFold)(tA)(T(cons)(tA)(h, E(concatenate)(tA)(t, ys)), f) ==| 
                                                                      ysNonEmpty |
                 f(h, E(listFold)(tA)(E(concatenate)(tA)(t, ys), f))           ==|
@@ -234,11 +232,11 @@ object ListTreeProgram {
                 f(h, f(E(listFold)(tA)(t, f), E(listFold)(tA)(ys, f)))        ==|
                                           andI(fIsAssoc, tNonEmpty, ysNonEmpty) |
                 f(f(h, E(listFold)(tA)(t, f)), E(listFold)(tA)(ys, f))        ==| 
-                                                                     ysNonEmpty |
+                                                    andI(tNonEmpty, ysNonEmpty) |
                 rhs(ihs.expression)
               }
 
-              val tIsEmptyCase = implI(t.isInstOf(T(nil)(tA))) { (tEmpty: Theorem) =>
+              val tIsEmptyCase: Theorem = implI(t.isInstOf(T(nil)(tA))) { (tEmpty: Theorem) =>
 
                 lhs(ihs.expression)                                           ==| 
                                                                     (_.trivial) |
@@ -260,6 +258,17 @@ object ListTreeProgram {
     }
   }
 
+  lazy val toListNonEmpty = {
+    def property(t: Expr) = E(toList)(tA)(t).isInstOf(T(cons)(tA))
+
+    structuralInduction(property _, T(tree)(tA)) { case (ihs, goal) =>
+      ihs.expression match {
+        case C(`branch`, l, r) => goal.by(andI(ihs.hypothesis(l), ihs.hypothesis(r)))
+        case C(`leaf`, _) => goal.trivial
+      }
+    }
+  }
+
   lazy val foldTheorem = forallI("f" :: ((tA, tA) =>: tA)) { case f => 
     implI(isAssoc(f, tA)) { (fIsAssoc: Theorem) =>
       def property(t: Expr) =
@@ -269,7 +278,28 @@ object ListTreeProgram {
       structuralInduction(property _, T(tree)(tA)) { case (ihs, goal) =>
         ihs.expression match {
           case C(`branch`, l, r) => {
-            goal.by(andI(ihs.hypothesis(l), ihs.hypothesis(r), fIsAssoc, splitListFold))
+
+            val splitListFoldInstantiated = splitListFold
+              .forallE(f, E(toList)(tA)(r))
+              .implE(_.by(fIsAssoc))
+              .implE(_.by(toListNonEmpty))
+              .forallE(E(toList)(tA)(l))
+              .implE(_.by(toListNonEmpty))
+
+            val derivation =
+              E(treeFold)(tA)(T(branch)(tA)(l, r), f)                                       ==|
+                                                                                  (_.trivial) |
+              f(E(treeFold)(tA)(l, f), E(treeFold)(tA)(r, f))                               ==|
+                                                                            ihs.hypothesis(l) |
+              f(E(listFold)(tA)(E(toList)(tA)(l), f), E(treeFold)(tA)(r, f))                ==|
+                                                                            ihs.hypothesis(r) |
+              f(E(listFold)(tA)(E(toList)(tA)(l), f), E(listFold)(tA)(E(toList)(tA)(r), f)) ==|
+                                                                    splitListFoldInstantiated |
+              E(listFold)(tA)(E(concatenate)(tA)(E(toList)(tA)(l), E(toList)(tA)(r)), f)    ==|
+                                                                                  (_.trivial) |
+              E(listFold)(tA)(E(toList)(tA)(T(branch)(tA)(l, r)), f)
+
+            goal.by(derivation)
           }
           case C(`leaf`, _) => goal.trivial
         }
@@ -281,10 +311,17 @@ object ListTreeProgram {
     implI(isAssoc(f, tA)) { (fIsAssoc: Theorem) =>
       forallI("t1" :: T(tree)(tA), "t2" :: T(tree)(tA)) { case Seq(t1, t2) =>
         implI(E(toList)(tA)(t1) === E(toList)(tA)(t2)) { (tsEqual: Theorem) =>
+
           val applied1 = forallE(implE(forallE(foldTheorem)(f))(_.by(fIsAssoc)))(t1)
           val applied2 = forallE(implE(forallE(foldTheorem)(f))(_.by(fIsAssoc)))(t2)
 
-          prove(E(treeFold)(tA)(t1, f) === E(treeFold)(tA)(t2, f), tsEqual, applied1, applied2)
+          E(treeFold)(tA)(t1, f)                ==|
+                                         applied1 |
+          E(listFold)(tA)(E(toList)(tA)(t1), f) ==|
+                                          tsEqual |
+          E(listFold)(tA)(E(toList)(tA)(t2), f) ==|
+                                         applied2 |
+          E(treeFold)(tA)(t2, f)
         }
       }
     }
