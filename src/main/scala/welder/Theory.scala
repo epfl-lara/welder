@@ -100,6 +100,21 @@ trait Theory
     def forallE(first: Expr, rest: Expr*): Attempt[Theorem] = self.forallE(this, first +: rest)
     def orE(conclusion: Expr)(cases: (Theorem, Goal) => Attempt[Witness]): Attempt[Theorem] = self.orE(this, conclusion)(cases)
     def notE: Attempt[Theorem] = self.notE(this)
+    def instantiateType(tpeParam: TypeParameter, replacement: Type): Theorem = {
+
+      val transformer = new SelfTreeTransformer {
+
+        override def transform(tpe: s.Type): t.Type = 
+          if (tpe == tpeParam) {
+            replacement
+          }
+          else {
+            super.transform(tpe)
+          }
+      }
+
+      new Theorem(transformer.transform(this.expression)).from(this)
+    }
   }
 
   /** Markings, used to taint Theorems that are valid only in a specific scope. */
