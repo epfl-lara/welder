@@ -157,8 +157,8 @@ object ListTreeProgram {
   val theory = theoryOf(program)
   import theory._
 
-  val tA = IntegerType
-  val tB = IntegerType
+  val tA = TypeParameter.fresh("A")
+  val tB = TypeParameter.fresh("B")
 
   lazy val mapCommutesWithConcatenateUsingProve = prove {
     forall("f" :: (tA =>: tB), "as" :: T(list)(tA), "bs" :: T(list)(tB)) { case (f, as, bs) =>
@@ -224,19 +224,30 @@ object ListTreeProgram {
             case C(`cons`, h, t) => {
 
               val tIsNonEmptyCase = implI(t.isInstOf(T(cons)(tA))) { (tNonEmpty: Theorem) =>
-                lhs(ihs.expression)                                           ==| truth |==
-                E(listFold)(tA)(T(cons)(tA)(h, E(concatenate)(tA)(t, ys)), f) ==| ysNonEmpty |==
-                f(h, E(listFold)(tA)(E(concatenate)(tA)(t, ys), f))           ==| andI(ihs.hypothesis(t), tNonEmpty, ysNonEmpty) |==
-                f(h, f(E(listFold)(tA)(t, f), E(listFold)(tA)(ys, f)))        ==| andI(fIsAssoc, tNonEmpty, ysNonEmpty) |==
-                f(f(h, E(listFold)(tA)(t, f)), E(listFold)(tA)(ys, f))        ==| ysNonEmpty |==
+                
+                lhs(ihs.expression)                                           ==| 
+                                                                    (_.trivial) |
+                E(listFold)(tA)(T(cons)(tA)(h, E(concatenate)(tA)(t, ys)), f) ==| 
+                                                                     ysNonEmpty |
+                f(h, E(listFold)(tA)(E(concatenate)(tA)(t, ys), f))           ==|
+                                 andI(ihs.hypothesis(t), tNonEmpty, ysNonEmpty) |
+                f(h, f(E(listFold)(tA)(t, f), E(listFold)(tA)(ys, f)))        ==|
+                                          andI(fIsAssoc, tNonEmpty, ysNonEmpty) |
+                f(f(h, E(listFold)(tA)(t, f)), E(listFold)(tA)(ys, f))        ==| 
+                                                                     ysNonEmpty |
                 rhs(ihs.expression)
               }
 
               val tIsEmptyCase = implI(t.isInstOf(T(nil)(tA))) { (tEmpty: Theorem) =>
-                lhs(ihs.expression)                                           ==| truth |==
-                E(listFold)(tA)(T(cons)(tA)(h, E(concatenate)(tA)(t, ys)), f) ==| ysNonEmpty |==
-                f(h, E(listFold)(tA)(E(concatenate)(tA)(t, ys), f))           ==| andI(tEmpty, ysNonEmpty) |==
-                f(h, E(listFold)(tA)(ys, f))                                  ==| andI(tEmpty, ysNonEmpty) |==
+
+                lhs(ihs.expression)                                           ==| 
+                                                                    (_.trivial) |
+                E(listFold)(tA)(T(cons)(tA)(h, E(concatenate)(tA)(t, ys)), f) ==|
+                                                                     ysNonEmpty |
+                f(h, E(listFold)(tA)(E(concatenate)(tA)(t, ys), f))           ==| 
+                                                       andI(tEmpty, ysNonEmpty) |
+                f(h, E(listFold)(tA)(ys, f))                                  ==| 
+                                                       andI(tEmpty, ysNonEmpty) |
                 rhs(ihs.expression)
               }
 

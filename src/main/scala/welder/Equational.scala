@@ -7,32 +7,53 @@ trait Equational { self: Theory =>
   import program.trees._
 
   trait AcceptsProof {
-    def ==|(t: Theorem): Node
+    def ==|(theorem: Theorem): Node
+    def ==|(proof: Goal => Attempt[Witness]): Node
   }
 
   trait Node {
-    def |==(node: Node): Chain = {
+    def |(node: Node): Chain = {
       val thiz = this
 
       new Chain {
         val first = thiz.first
         val next = node.next
         val last = node.first
-        def equality = prove(Equals(thiz.first, node.first), thiz.next)
+        def equality = {
+          val goal = new Goal(Equals(thiz.first, node.first))
+          thiz.next(goal) flatMap { (w: Witness) => 
+            if (!goal.accepts(w)) {
+              Attempt.incorrectWitness
+            }
+            else {
+              Attempt.success(w.theorem)
+            }
+          }
+        }
       }
     }
-    def |==(end: Expr): Attempt[Theorem] =
-      prove(Equals(this.first, end), this.next)
+    def |(end: Expr): Attempt[Theorem] = {
+
+      val goal = new Goal(Equals(this.first, end))
+      this.next(goal) flatMap { (w: Witness) => 
+        if (!goal.accepts(w)) {
+          Attempt.incorrectWitness
+        }
+        else {
+          Attempt.success(w.theorem)
+        }
+      }
+    }
 
     val first: Expr
-    val next: Theorem
+    val next: Goal => Attempt[Witness]
   }
 
   trait Chain extends Node {
     val last: Expr
     def equality: Attempt[Theorem]
 
-    override def |==(node: Node): Chain = {
+    override def |(node: Node): Chain = {
       val thiz = this
 
       new Chain {
@@ -40,19 +61,25 @@ trait Equational { self: Theory =>
         val last = node.first
         val equality = transitivity(thiz.first, thiz.last, node.first)(
           { (goal: Goal) => thiz.equality.flatMap(goal.by(_)) },
-          { (goal: Goal) => goal.by(thiz.next) })
+          { (goal: Goal) => thiz.next(goal) })
         val next = node.next
       }
     }
-    override def |==(end: Expr): Attempt[Theorem] = transitivity(this.first, this.last, end)(
+    override def |(end: Expr): Attempt[Theorem] = transitivity(this.first, this.last, end)(
       { (goal: Goal) => this.equality.flatMap(goal.by(_)) },
-      { (goal: Goal) => goal.by(this.next) })
+      { (goal: Goal) => this.next(goal) })
   }
 
   implicit def exprToAcceptsProof(expr: Expr): AcceptsProof = new AcceptsProof {
-    def ==|(t: Theorem): Node = new Node {
+    
+    def ==|(theorem: Theorem): Node = new Node {
       val first = expr
-      val next = t
+      val next = (goal: Goal) => goal.by(theorem)
+    }
+
+    def ==|(proof: Goal => Attempt[Witness]): Node = new Node {
+      val first = expr
+      val next = proof
     }
   }
 }
