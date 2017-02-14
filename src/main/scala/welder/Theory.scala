@@ -114,7 +114,7 @@ trait Theory
 
   /** States a goal, in the form of an expression to be proved. */
   class Goal(val expression: Expr) { 
-    require(expression.getType == BooleanType)
+    require(expression.getType == BooleanType, "Non-boolean expression: " + expression)
 
     /** Tries to satisfy the goal.
      *
