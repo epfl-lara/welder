@@ -158,13 +158,6 @@ object ListTreeProgram {
   val tA = TypeParameter.fresh("A")
   val tB = TypeParameter.fresh("B")
 
-  lazy val mapCommutesWithConcatenateUsingProve = prove {
-    forall("f" :: (tA =>: tB), "as" :: T(list)(tA), "bs" :: T(list)(tB)) { case (f, as, bs) =>
-      E(listMap)(tA, tB)(E(concatenate)(tA)(as, bs), f) ===
-      E(concatenate)(tB)(E(listMap)(tA, tB)(as, f), E(listMap)(tA, tB)(bs, f))
-    }
-  }
-
   lazy val mapCommutesWithConcatenate = forallI("f" :: (tA =>: tB), "bs" :: T(list)(tA)) { case Seq(f, bs) =>
     def mapCommutes(as: Expr) =
       E(listMap)(tA, tB)(E(concatenate)(tA)(as, bs), f) ===
@@ -177,13 +170,6 @@ object ListTreeProgram {
       }
     } 
   }
-
-  lazy val mapCommutesWithToListUsingProve = prove({
-    forall("f" :: (tA =>: tB), "t" :: T(tree)(tA)) { case (f, t) =>
-      E(toList)(tB)(E(treeMap)(tA, tB)(t, f)) ===
-      E(listMap)(tA, tB)(E(toList)(tA)(t), f) 
-    }
-  }, mapCommutesWithConcatenate)
 
   lazy val mapCommutesWithToList = forallI("f" :: (tA =>: tB)) { case f => 
 
