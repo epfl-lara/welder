@@ -109,6 +109,7 @@ trait Theory
             replacement
           }
           else {
+            // TODO: Check that tpeParam is actually free ?
             super.transform(tpe)
           }
       }
