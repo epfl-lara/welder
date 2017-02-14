@@ -15,7 +15,7 @@ trait Theory
      with Evaluators
      with Paths
      with Rules
-     with Solvers {
+     with Solvers { self =>
 
   // Program over which theorems are stated.
   val program: InoxProgram
@@ -93,6 +93,13 @@ trait Theory
 
     /** Checks if this `Theorem` is valid in the global scope. */
     def isGloballyValid: Boolean = markings.isEmpty
+
+
+    def andE: Attempt[Seq[Theorem]] = self.andE(this)
+    def implE(proof: Goal => Attempt[Witness]): Attempt[Theorem] = self.implE(this)(proof)
+    def forallE(first: Expr, rest: Expr*): Attempt[Theorem] = self.forallE(this, first +: rest)
+    def orE(conclusion: Expr)(cases: (Theorem, Goal) => Attempt[Witness]): Attempt[Theorem] = self.orE(this, conclusion)(cases)
+    def notE: Attempt[Theorem] = self.notE(this)
   }
 
   /** Markings, used to taint Theorems that are valid only in a specific scope. */
