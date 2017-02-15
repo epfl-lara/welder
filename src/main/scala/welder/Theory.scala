@@ -94,15 +94,27 @@ trait Theory
     /** Checks if this `Theorem` is valid in the global scope. */
     def isGloballyValid: Boolean = markings.isEmpty
 
-
+    /** Conjunction elimination. */
     def andE: Attempt[Seq[Theorem]] = self.andE(this)
-    def implE(proof: Goal => Attempt[Witness]): Attempt[Theorem] = self.implE(this)(proof)
-    def forallE(first: Expr, rest: Expr*): Attempt[Theorem] = self.forallE(this, first +: rest)
-    def orE(conclusion: Expr)(cases: (Theorem, Goal) => Attempt[Witness]): Attempt[Theorem] = self.orE(this, conclusion)(cases)
+
+    /** Implication elimination. */
+    def implE(proof: Goal => Attempt[Witness]): Attempt[Theorem] =
+      self.implE(this)(proof)
+
+    /** Universal quantification elimination. */
+    def forallE(first: Expr, rest: Expr*): Attempt[Theorem] =
+      self.forallE(this, first +: rest)
+
+    /** Disjunction elimination. */
+    def orE(conclusion: Expr)(cases: (Theorem, Goal) => Attempt[Witness]): Attempt[Theorem] = 
+      self.orE(this, conclusion)(cases)
+
+    /** Negation elimination. */
     def notE: Attempt[Theorem] = self.notE(this)
-    def instantiateType(tpeParam: TypeParameter, tpe: Type): Theorem = {
+
+    /** Type instantiation. */
+    def instantiateType(tpeParam: TypeParameter, tpe: Type): Theorem =
       new Theorem(symbols.instantiateType(this.expression, Map(tpeParam -> tpe))).from(this)
-    }
   }
 
   /** Markings, used to taint Theorems that are valid only in a specific scope. */
@@ -207,22 +219,35 @@ trait Theory
 
   // TODO: Record counter-examples.
   // TODO: Record multiple failed attempts.
+
+  /** Represents possibly failing computations.
+   *
+   * In case of non-successful attempts, returns the reasons of failure.
+   */ 
   sealed abstract class Attempt[+A] {
+
+    /** Applies a function to the value in case of a successful attempt. */
     def map[B](f: A => B): Attempt[B] = this match {
       case Success(x) => Success(f(x))
       case Failure(msg) => Failure(msg)
     }
 
+    /** Applies a function to the value in case of a successful attempt. */
     def flatMap[B](f: A => Attempt[B]) = this match {
       case Success(x) => f(x)
       case Failure(msg) => Failure(msg)
     }
 
+    /** Checks if the attempt is successful. */
     def isSuccessful: Boolean = this match {
       case Success(_) => true
       case _          => false 
     }
 
+    /** Gets the successful value.
+     *
+     * Throws an exception when applied on an unsuccessful attempt.
+     */
     def get: A = attemptToValue(this)
   }
   case class Success[A](value: A) extends Attempt[A]
@@ -260,11 +285,13 @@ trait Theory
     }
   }
 
+  case class AttemptException(reason: FailureReason) extends Exception(reason.toString)
+
   implicit def valueToAttempt[A](value: A): Attempt[A] = Attempt.success(value)
 
   implicit def attemptToValue[A](attempt: Attempt[A]): A = attempt match {
     case Success(x) => x
-    case Failure(msg) => program.ctx.reporter.fatalError(msg)
+    case Failure(reason) => throw AttemptException(reason)
   }
 
 
