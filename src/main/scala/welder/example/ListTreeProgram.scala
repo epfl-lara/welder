@@ -163,7 +163,7 @@ object ListTreeProgram {
       E(listMap)(tA, tB)(E(concatenate)(tA)(as, bs), f) ===
       E(concatenate)(tB)(E(listMap)(tA, tB)(as, f), E(listMap)(tA, tB)(bs, f))
 
-    structuralInduction(mapCommutes _, T(list)(tA)) { case (ihs, goal) =>
+    structuralInduction(mapCommutes _, "xs" :: T(list)(tA)) { case (ihs, goal) =>
       ihs.expression match {
         case C(`cons`, x, xs) => goal.by(ihs.hypothesis(xs))
         case C(`nil`) => goal.trivial
@@ -177,7 +177,7 @@ object ListTreeProgram {
       E(toList)(tB)(E(treeMap)(tA, tB)(t, f)) ===
       E(listMap)(tA, tB)(E(toList)(tA)(t), f) 
 
-    structuralInduction(mapCommutes _, T(tree)(tA)) { case (ihs, goal) =>
+    structuralInduction(mapCommutes _, "t" :: T(tree)(tA)) { case (ihs, goal) =>
       ihs.expression match {
         case C(`branch`, l, r) => {
           goal.by(andI(ihs.hypothesis(l), ihs.hypothesis(r), mapCommutesWithConcatenate))
@@ -203,7 +203,7 @@ object ListTreeProgram {
             lhs(xs) === rhs(xs)
           }
 
-        structuralInduction(property _, T(list)(tA)) { case (ihs, goal) =>
+        structuralInduction(property _, "xs" :: T(list)(tA)) { case (ihs, goal) =>
           ihs.expression match {
             case C(`cons`, h, t) => {
 
@@ -247,7 +247,7 @@ object ListTreeProgram {
   lazy val toListNonEmpty = {
     def property(t: Expr) = E(toList)(tA)(t).isInstOf(T(cons)(tA))
 
-    structuralInduction(property _, T(tree)(tA)) { case (ihs, goal) =>
+    structuralInduction(property _, "t" :: T(tree)(tA)) { case (ihs, goal) =>
       ihs.expression match {
         case C(`branch`, l, r) => goal.by(andI(ihs.hypothesis(l), ihs.hypothesis(r)))
         case C(`leaf`, _) => goal.trivial
@@ -261,7 +261,7 @@ object ListTreeProgram {
         E(treeFold)(tA)(t, f) ===
         E(listFold)(tA)(E(toList)(tA)(t), f)
 
-      structuralInduction(property _, T(tree)(tA)) { case (ihs, goal) =>
+      structuralInduction(property _, "t" :: T(tree)(tA)) { case (ihs, goal) =>
         ihs.expression match {
           case C(`branch`, l, r) => {
 

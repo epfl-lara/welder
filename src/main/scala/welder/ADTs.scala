@@ -20,30 +20,37 @@ trait ADTs { self: Theory =>
   /** Proves that a property holds on all values of a ADT by structural induction.
    *
    * @param property The property to be proven. Should be forall-quantified.
-   * @param tpe      The type of ADTs for which the property should hold.
+   * @param valDef   The variable definition for which the property should hold.
+   *                 Its type be an ADT.
    * @param cases    Proof for each of the cases.
    * @return A forall-quantified theorem, stating that the property holds for all
-   *         expressions of the type `tpe`.
+   *         expressions of the given type.
    */
-  def structuralInduction(property: Expr, tpe: ADTType)
+  def structuralInduction(property: Expr, valDef: ValDef)
       (cases: (StructuralInductionHypotheses, Goal) => Attempt[Witness]): Attempt[Theorem] = {
 
-    forallToPredicate(property, tpe) flatMap { (f: Expr => Expr) => 
-      structuralInduction(f(_), tpe)(cases)
+    forallToPredicate(property, valDef.tpe) flatMap { (f: Expr => Expr) => 
+      structuralInduction(f(_), valDef)(cases)
     }
   }
 
   /** Proves that a property holds on all values of a ADT by structural induction.
    *
    * @param property The property to be proven.
-   * @param tpe      The type of ADTs for which the property should hold.
+   * @param valDef   The variable definition for which the property should hold.
+   *                 Its type be an ADT.
    * @param cases    Proof for each of the cases.
    * @return A forall-quantified theorem, stating that the property holds for all
-   *         expressions of the type `tpe`.
+   *         expressions of the given type.
    */
-  def structuralInduction(property: Expr => Expr, tpe: ADTType)
+  def structuralInduction(property: Expr => Expr, valDef: ValDef)
       (cases: (StructuralInductionHypotheses, Goal) => Attempt[Witness]): Attempt[Theorem] = {
 
+    if (!valDef.tpe.isInstanceOf[ADTType]) {
+      return Attempt.typeError("structuralInduction", valDef.tpe)
+    }
+
+    val tpe = valDef.tpe.asInstanceOf[ADTType]
     val p = freeze(tpe, property)
 
     val allCases = {
@@ -109,8 +116,8 @@ trait ADTs { self: Theory =>
     }
 
     Attempt.all(attempts) map { (theorems: Seq[Theorem]) =>
-      val x = Variable.fresh("x", tpe)
-      new Theorem(Forall(Seq(x.toVal), p(x))).from(theorems)
+      val x = valDef.freshen
+      new Theorem(Forall(Seq(x), p(x.toVariable))).from(theorems)
     }
   }
 }
