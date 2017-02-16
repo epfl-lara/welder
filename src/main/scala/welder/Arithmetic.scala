@@ -113,54 +113,65 @@ trait Arithmetic { self: Theory =>
   def naturalInduction(property: Expr => Expr, base: Expr, baseCase: Goal => Attempt[Witness])
       (inductiveCase: (NaturalInductionHypotheses, Goal) => Attempt[Witness]): Attempt[Theorem] = {
     
+    // Natural induction only works on BigInt.
     if (base.getType != IntegerType) {
       return Attempt.typeError("naturalInduction", base.getType)
     }
 
+    // Ensures that the property function is well-behaved.
     val p = freeze(IntegerType, property)
 
+    // Attempts to prove the base case.
     val baseProposition = p(base)
     val baseGoal = new Goal(baseProposition)
+    val baseAttempt = catchFailedAttempts {
+      for {
+        baseWitness <- baseCase(baseGoal)
+        baseTheorem <- baseWitness.extractTheorem(baseGoal)
+      } yield baseTheorem
+    }
 
-    baseCase(baseGoal) flatMap { (baseWitness: Witness) =>
-      if (!baseGoal.accepts(baseWitness)) {
-        Attempt.incorrectWitness
+    // Creates induction hypotheses.
+    // Each hypothesis is marked.
+    val n = Variable.fresh("n", IntegerType)
+    val (greaterThanBase, m1) = new Theorem(GreaterThan(n, base)).mark
+    val (propOfN, m2) = new Theorem(p(n)).mark
+    val lessEqN = Variable.fresh("lessEqN", IntegerType)
+    val (propLessEqN, m3) = new Theorem(Forall(Seq(lessEqN.toVal),
+      Implies(And(LessEquals(lessEqN, n), GreaterEquals(lessEqN, base)), p(lessEqN)))).mark
+
+    // Attempts to prove the inductive case.
+    val inductiveAttempt = {
+
+      // Creates the actual record to be fed to the user-specified function.
+      val inductionHypotheses = new NaturalInductionHypotheses {
+        val variable = n
+        val variableGreaterThanBase = greaterThanBase
+        val propertyForVar = propOfN
+        val propertyForLessOrEqualToVar = propLessEqN
       }
-      else {
-        val n = Variable.fresh("n", IntegerType)
-        val (greaterThanBase, m1) = new Theorem(GreaterThan(n, base)).mark
-        val (propOfN, m2) = new Theorem(p(n)).mark
-        val lessEqN = Variable.fresh("lessEqN", IntegerType)
-        val (propLessEqN, m3) = new Theorem(Forall(Seq(lessEqN.toVal),
-          Implies(And(LessEquals(lessEqN, n), GreaterEquals(lessEqN, base)), p(lessEqN)))).mark
 
-        val inductionHypotheses = new NaturalInductionHypotheses {
-          val variable = n
-          val variableGreaterThanBase = greaterThanBase
-          val propertyForVar = propOfN
-          val propertyForLessOrEqualToVar = propLessEqN
-        }
+      val propOfSuccN = p(Plus(n, IntegerLiteral(1)))
+      val inductiveGoal = new Goal(propOfSuccN)
 
-        val propOfSuccN = p(Plus(n, IntegerLiteral(1)))
-        val inductiveGoal = new Goal(propOfSuccN)
-
-        inductiveCase(inductionHypotheses, inductiveGoal) flatMap { (inductiveWitness: Witness) => 
-          if (!inductiveGoal.accepts(inductiveWitness)) {
-            Attempt.incorrectWitness
-          }
-          else {
-            val x = Variable.fresh("n", IntegerType)
-            Attempt.success {
-              new Theorem(Forall(Seq(x.toVal), Implies(GreaterEquals(x, base), p(x))))
-                .from(baseWitness.theorem)
-                .from(inductiveWitness.theorem)
-                .unmark(m1)
-                .unmark(m2)
-                .unmark(m3)
-            }
-          }
-        }
+      catchFailedAttempts {
+        for {
+          inductiveWitness <- inductiveCase(inductionHypotheses, inductiveGoal)
+          inductiveTheorem <- inductiveWitness.extractTheorem(inductiveGoal)
+        } yield inductiveTheorem
       }
+    }
+
+    // Indicates that both the base and inductive case must succeed.
+    // In which case the proof is complete and we return a theorem.
+    Attempt.all(baseAttempt, inductiveAttempt) map { case Seq(baseTheorem, inductiveTheorem) => 
+      val x = Variable.fresh("n", IntegerType)
+      new Theorem(Forall(Seq(x.toVal), Implies(GreaterEquals(x, base), p(x))))
+        .from(baseTheorem)
+        .from(inductiveTheorem)
+        .unmark(m1)
+        .unmark(m2)
+        .unmark(m3)
     }
   }
 
