@@ -1,12 +1,10 @@
 
-package welder
-package example
-
 import inox._
 import inox.trees.{forall => _, _}
 import inox.trees.dsl._
+import welder._
 
-object ListTreeProgram {
+object ListsAndTreesExample {
 
   val list: Identifier = FreshIdentifier("List")
   val cons: Identifier = FreshIdentifier("Cons")
@@ -225,7 +223,7 @@ object ListTreeProgram {
               val tIsEmptyCase: Theorem = implI(t.isInstOf(T(nil)(tA))) { (tEmpty: Theorem) =>
 
                 lhs(ihs.expression)                                           ==| 
-                                                                    (_.trivial) |
+                                                                        trivial |
                 E(listFold)(tA)(T(cons)(tA)(h, E(concatenate)(tA)(t, ys)), f) ==|
                                                                      ysNonEmpty |
                 f(h, E(listFold)(tA)(E(concatenate)(tA)(t, ys), f))           ==| 
@@ -274,7 +272,7 @@ object ListTreeProgram {
 
             val derivation =
               E(treeFold)(tA)(T(branch)(tA)(l, r), f)                                       ==|
-                                                                                  (_.trivial) |
+                                                                                      trivial |
               f(E(treeFold)(tA)(l, f), E(treeFold)(tA)(r, f))                               ==|
                                                                             ihs.hypothesis(l) |
               f(E(listFold)(tA)(E(toList)(tA)(l), f), E(treeFold)(tA)(r, f))                ==|
@@ -282,7 +280,7 @@ object ListTreeProgram {
               f(E(listFold)(tA)(E(toList)(tA)(l), f), E(listFold)(tA)(E(toList)(tA)(r), f)) ==|
                                                                     splitListFoldInstantiated |
               E(listFold)(tA)(E(concatenate)(tA)(E(toList)(tA)(l), E(toList)(tA)(r)), f)    ==|
-                                                                                  (_.trivial) |
+                                                                                      trivial |
               E(listFold)(tA)(E(toList)(tA)(T(branch)(tA)(l, r)), f)
 
             goal.by(derivation)
