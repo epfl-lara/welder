@@ -165,6 +165,19 @@ In this case, the goal passed to the contradiction function will contain the boo
 Witnesses are values that witness the achievement of a `goal`.
 They are obtained using the `goal.by(theorem)` method, which takes a `theorem` as argument. If the theorem implies the goal, a witness will be returned. When the goal is trivially true, the method `goal.trivial` can be used as a shortcut.
 
+Even shorter, the object `trivial` can be used in all the following contexts to indicate that the goal is trivially achieved:
+
+- `Witness`
+- `Attempt[Witness]`
+- `Goal => Witness`
+- `(Theorem, Goal) => Witness`
+
+For instance, one could write:
+
+```scala
+notI(E(false))(trivial)  // Returns `Success(Theorem(¬false))`
+```
+
 Now that we have introduces those fundamental concepts, we can get back on track and try to prove the formula we have introduced (way way) earlier!
 
 Definition of the property
@@ -238,7 +251,7 @@ def property(n: Expr): Expr = {
 // The property we want to prove is defined just above.
 // The base expression is `0`.
 // The proof for the base case is trivial.
-val ourTheorem = naturalInduction(property(_), E(BigInt(0)), _.trivial) { 
+val ourTheorem = naturalInduction(property(_), E(BigInt(0)), trivial) { 
   case (ihs, goal) =>
     // `ihs` contains induction hypotheses
     // and `goal` contains the property that needs to be proven.
