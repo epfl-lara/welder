@@ -145,27 +145,26 @@ trait Theory
      */
     def by(theorem: Theorem): Attempt[Witness] = 
       if (theorem.expression == expression) {
-        Attempt.success(new Witness(new Theorem(expression).from(theorem)))
+        Attempt.success(new ActualWitness(new Theorem(expression).from(theorem)))
       }
       else {
-        // Do we really want to invoke the solver in this case ?
-        prove(expression, theorem).map(new Witness(_))
+        prove(expression, theorem).map(new ActualWitness(_))
       }
 
     /** Tries to solve the goal without any other theorems. */
     def trivial: Attempt[Witness] = by(truth)
 
-    /** Verifies that the [[Witness]] is accepted. */
-    private[welder] def accepts(witness: Witness): Boolean =
-      expression == witness.theorem.expression
-
     override def toString: String = "Goal(" + expression.toString + ")"
   }
 
+  trait Witness {
+    def extractTheorem(goal: Goal): Attempt[Theorem]
+  }
+
   /** Witness of the satisfaction of a [[Goal]]. */
-  class Witness private[welder] (val theorem: Theorem) {
-    private[welder] def extractTheorem(goal: Goal): Attempt[Theorem] = {
-      if (goal.accepts(this)) {
+  private class ActualWitness(theorem: Theorem) extends Witness {
+    override def extractTheorem(goal: Goal): Attempt[Theorem] = {
+      if (goal.expression == theorem.expression) {
         Attempt.success(theorem)
       }
       else {
@@ -173,6 +172,18 @@ trait Theory
       }
     }
   }
+
+  private class ImplicationWitness(theorem: Theorem) extends Witness {
+    override def extractTheorem(goal: Goal): Attempt[Theorem] = {
+      prove(goal.expression, theorem)
+    }
+  }
+
+  implicit def theoremAttemptToWitnessAttempt(attempt: Attempt[Theorem]): Attempt[Witness] =
+    attempt.map(new ImplicationWitness(_))
+
+  implicit def theoremToWitnessAttempt(theorem: Theorem): Attempt[Witness] =
+    Attempt.success(new ImplicationWitness(theorem))
 
   /** Turns any function `f: Expr => Expr` into an ''expression context''.
    *
@@ -324,7 +335,8 @@ trait Theory
   }
 
   /** States that the goal can be trivially proven. */
-  object trivial extends Function1[Goal, Attempt[Witness]]
+  object trivial extends Success[Witness](new ImplicationWitness(truth))
+                    with Function1[Goal, Attempt[Witness]]
                     with Function2[Theorem, Goal, Attempt[Witness]] {
 
     override def apply(goal: Goal): Attempt[Witness] = goal.trivial

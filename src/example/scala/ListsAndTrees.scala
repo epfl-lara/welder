@@ -163,8 +163,8 @@ object ListsAndTreesExample {
 
     structuralInduction(mapCommutes _, "xs" :: T(list)(tA)) { case (ihs, goal) =>
       ihs.expression match {
-        case C(`cons`, x, xs) => goal.by(ihs.hypothesis(xs))
-        case C(`nil`) => goal.trivial
+        case C(`cons`, x, xs) => ihs.hypothesis(xs)
+        case C(`nil`) => trivial
       }
     } 
   }
@@ -178,9 +178,9 @@ object ListsAndTreesExample {
     structuralInduction(mapCommutes _, "t" :: T(tree)(tA)) { case (ihs, goal) =>
       ihs.expression match {
         case C(`branch`, l, r) => {
-          goal.by(andI(ihs.hypothesis(l), ihs.hypothesis(r), mapCommutesWithConcatenate))
+          andI(ihs.hypothesis(l), ihs.hypothesis(r), mapCommutesWithConcatenate)
         }
-        case C(`leaf`, _) => goal.trivial
+        case C(`leaf`, _) => trivial
       }
     }
   }
@@ -233,9 +233,9 @@ object ListsAndTreesExample {
                 rhs(ihs.expression)
               }
 
-              goal.by(andI(tIsNonEmptyCase, tIsEmptyCase))
+              andI(tIsNonEmptyCase, tIsEmptyCase)
             }
-            case C(`nil`) => goal.trivial
+            case C(`nil`) => trivial
           }
         }
       }
@@ -247,8 +247,8 @@ object ListsAndTreesExample {
 
     structuralInduction(property _, "t" :: T(tree)(tA)) { case (ihs, goal) =>
       ihs.expression match {
-        case C(`branch`, l, r) => goal.by(andI(ihs.hypothesis(l), ihs.hypothesis(r)))
-        case C(`leaf`, _) => goal.trivial
+        case C(`branch`, l, r) => andI(ihs.hypothesis(l), ihs.hypothesis(r))
+        case C(`leaf`, _) => trivial
       }
     }
   }
@@ -270,22 +270,19 @@ object ListsAndTreesExample {
               .forallE(E(toList)(tA)(l))
               .implE(_.by(toListNonEmpty))
 
-            val derivation =
-              E(treeFold)(tA)(T(branch)(tA)(l, r), f)                                       ==|
-                                                                                      trivial |
-              f(E(treeFold)(tA)(l, f), E(treeFold)(tA)(r, f))                               ==|
-                                                                            ihs.hypothesis(l) |
-              f(E(listFold)(tA)(E(toList)(tA)(l), f), E(treeFold)(tA)(r, f))                ==|
-                                                                            ihs.hypothesis(r) |
-              f(E(listFold)(tA)(E(toList)(tA)(l), f), E(listFold)(tA)(E(toList)(tA)(r), f)) ==|
-                                                                    splitListFoldInstantiated |
-              E(listFold)(tA)(E(concatenate)(tA)(E(toList)(tA)(l), E(toList)(tA)(r)), f)    ==|
-                                                                                      trivial |
-              E(listFold)(tA)(E(toList)(tA)(T(branch)(tA)(l, r)), f)
-
-            goal.by(derivation)
+            E(treeFold)(tA)(T(branch)(tA)(l, r), f)                                       ==|
+                                                                                    trivial |
+            f(E(treeFold)(tA)(l, f), E(treeFold)(tA)(r, f))                               ==|
+                                                                          ihs.hypothesis(l) |
+            f(E(listFold)(tA)(E(toList)(tA)(l), f), E(treeFold)(tA)(r, f))                ==|
+                                                                          ihs.hypothesis(r) |
+            f(E(listFold)(tA)(E(toList)(tA)(l), f), E(listFold)(tA)(E(toList)(tA)(r), f)) ==|
+                                                                  splitListFoldInstantiated |
+            E(listFold)(tA)(E(concatenate)(tA)(E(toList)(tA)(l), E(toList)(tA)(r)), f)    ==|
+                                                                                    trivial |
+            E(listFold)(tA)(E(toList)(tA)(T(branch)(tA)(l, r)), f)
           }
-          case C(`leaf`, _) => goal.trivial
+          case C(`leaf`, _) => trivial
         }
       }
     }
