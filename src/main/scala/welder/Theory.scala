@@ -322,4 +322,14 @@ trait Theory
     }
     case _ => Attempt.fail("Could not transform expression into predicate.")
   }
+
+  /** States that the goal can be trivially proven. */
+  object trivial extends Function1[Goal, Attempt[Witness]]
+                    with Function2[Theorem, Goal, Attempt[Witness]] {
+
+    override def apply(goal: Goal): Attempt[Witness] = goal.trivial
+    override def apply(theorem: Theorem, goal: Goal): Attempt[Witness] = {
+      goal.by(theorem)
+    }
+  }
 }
