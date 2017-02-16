@@ -105,13 +105,11 @@ trait ADTs { self: Theory =>
 
       val goal = new Goal(p(expr))
 
-      cases(struct, goal) flatMap { (witness: Witness) =>
-        if (!goal.accepts(witness)) {
-          Attempt.incorrectWitness
-        }
-        else {
-          Attempt.success(witness.theorem.unmark(marking))
-        }
+      catchFailedAttempts {
+        for {
+          witness <- cases(struct, goal)
+          theorem <- witness.extractTheorem(goal)
+        } yield theorem.unmark(marking)
       }
     }
 

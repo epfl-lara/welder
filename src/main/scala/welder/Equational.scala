@@ -45,13 +45,12 @@ trait Equational { self: Theory =>
         val last = node.first
         def equality = {
           val goal = new Goal(Equals(thiz.first, node.first))
-          thiz.next(goal) flatMap { (w: Witness) => 
-            if (!goal.accepts(w)) {
-              Attempt.incorrectWitness
-            }
-            else {
-              Attempt.success(w.theorem)
-            }
+
+          catchFailedAttempts {
+            for {
+              witness <- thiz.next(goal)
+              theorem <- witness.extractTheorem(goal)
+            } yield theorem
           }
         }
       }
@@ -61,13 +60,11 @@ trait Equational { self: Theory =>
     def |(end: Expr): Attempt[Theorem] = {
 
       val goal = new Goal(Equals(this.first, end))
-      this.next(goal) flatMap { (w: Witness) => 
-        if (!goal.accepts(w)) {
-          Attempt.incorrectWitness
-        }
-        else {
-          Attempt.success(w.theorem)
-        }
+      catchFailedAttempts {
+        for {
+          witness <- this.next(goal)
+          theorem <- witness.extractTheorem(goal)
+        } yield theorem
       }
     }
   }
