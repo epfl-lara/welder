@@ -264,6 +264,13 @@ trait Theory
       case _          => false 
     }
 
+    /** Specifies an alternative in case `this` attempt fails. */
+    def orElse[B >: A](alternative: => Attempt[B]): Attempt[B] = this match {
+      case Success(_) => this
+      case Failure(_) => Attempt.atLeastOne(Seq(this, alternative))
+                          .map((xs: Seq[B]) => xs.head)
+    }
+
     /** Gets the successful value.
      *
      * Throws an exception when applied on an unsuccessful attempt.
