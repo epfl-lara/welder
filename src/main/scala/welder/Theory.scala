@@ -163,7 +163,16 @@ trait Theory
   }
 
   /** Witness of the satisfaction of a [[Goal]]. */
-  class Witness private[welder] (val theorem: Theorem)
+  class Witness private[welder] (val theorem: Theorem) {
+    private[welder] def extractTheorem(goal: Goal): Attempt[Theorem] = {
+      if (goal.accepts(this)) {
+        Attempt.success(theorem)
+      }
+      else {
+        Attempt.incorrectWitness
+      }
+    }
+  }
 
   /** Turns any function `f: Expr => Expr` into an ''expression context''.
    *
@@ -282,6 +291,15 @@ trait Theory
           case Success(v) => v
         })
       }
+    }
+  }
+
+  private[welder] def catchFailedAttempts[A](attempt: => Attempt[A]): Attempt[A] = {
+    try {
+      attempt
+    }
+    catch {
+      case AttemptException(reason) => Failure(reason)
     }
   }
 
