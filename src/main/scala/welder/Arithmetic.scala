@@ -164,7 +164,7 @@ trait Arithmetic { self: Theory =>
 
     // Indicates that both the base and inductive case must succeed.
     // In which case the proof is complete and we return a theorem.
-    Attempt.all(baseAttempt, inductiveAttempt) map { case Seq(baseTheorem, inductiveTheorem) => 
+    Attempt.all(Seq(baseAttempt, inductiveAttempt)) map { case Seq(baseTheorem, inductiveTheorem) => 
       val x = Variable.fresh("n", IntegerType)
       new Theorem(Forall(Seq(x.toVal), Implies(GreaterEquals(x, base), p(x))))
         .from(baseTheorem)
