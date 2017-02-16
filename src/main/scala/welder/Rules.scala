@@ -8,20 +8,47 @@ import inox.ast._
 trait Rules { self: Theory =>
   import program.trees._
 
+  /** Negation introduction.
+   *
+   * Proves the negation of some `hypothesis` by showing that it implies `false`.
+   *
+   * @param hypothesis    The hypothesis to disprove.
+   * @param contradiction Proof of `false`, given the `hypothesis`.
+   * @return A theorem for the negation of the hypothesis.
+   */
   def notI(hypothesis: Expr)
           (contradiction: (Theorem, Goal) => Attempt[Witness]): Attempt[Theorem] = {
 
     val (hyp, mark) = new Theorem(hypothesis).mark
     val goal = new Goal(BooleanLiteral(false))
-    contradiction(hyp, goal) flatMap { (witness: Witness) =>
-      if (goal.accepts(witness)) {
-        Attempt.success(new Theorem(Not(hypothesis)).from(witness.theorem).unmark(mark))
-      }
-      else {
-        Attempt.incorrectWitness
-      }
+
+    catchFailedAttempts {
+      for {
+        witness <- contradiction(hyp, goal)
+        theorem <- witness.extractTheorem(goal)
+      } yield new Theorem(Not(hypothesis)).from(theorem).unmark(mark)
     }
   }
+
+  // NOTE
+  // 
+  // This combinator can be derived from others.
+  // No need for it to be primitive.
+  //  
+  // def notI2(hypothesis: Expr)
+  //         (contradiction: (Theorem, Goal) => Attempt[Witness]): Attempt[Theorem] = {
+  
+  //   catchFailedAttempts {
+  //     notI.forallE(hypothesis).implE(_.by(implI(hypothesis) { (hyp: Theorem) =>
+  //       val goal = new Goal(BooleanLiteral(false))
+  //       for {
+  //         witness <- contradiction(hyp, goal)
+  //         theorem <- witness.extractTheorem(goal)
+  //       } yield theorem
+  //     }))
+  //   }
+  // }
+
 
   /** Negation introduction.
    *
@@ -33,7 +60,7 @@ trait Rules { self: Theory =>
 
     new Theorem(Forall(Seq(x.toVal), expr))
   }
-    
+
   /** Removes a top level double negation.
    *
    * @param thm A `Theorem` of the form `Not(Not(expr))`.
@@ -94,13 +121,8 @@ trait Rules { self: Theory =>
   def orI(expressions: Seq[Expr])(cases: Goal => Attempt[Witness]): Attempt[Theorem] = {
     val attempts = expressions.map { (expr: Expr) =>
       val goal = new Goal(expr)
-      cases(goal) flatMap { (witness: Witness) =>
-        if (goal.accepts(witness)) {
-          Attempt.success(witness.theorem)
-        }
-        else {
-          Attempt.incorrectWitness
-        }
+      catchFailedAttempts {
+        cases(goal) flatMap { (witness: Witness) => witness.extractTheorem(goal) }
       }
     }
 
@@ -133,13 +155,8 @@ trait Rules { self: Theory =>
           val (hyp, mark) = new Theorem(expr).mark
           val goal = new Goal(conclusion)
 
-          cases(hyp, goal) flatMap { (witness: Witness) =>
-            if (goal.accepts(witness)) {
-              Attempt.success(witness.theorem.unmark(mark))
-            }
-            else {
-              Attempt.incorrectWitness
-            }
+          catchFailedAttempts {
+            cases(hyp, goal) flatMap { (witness: Witness) => witness.extractTheorem(goal) }
           }
         }
 
@@ -177,8 +194,10 @@ trait Rules { self: Theory =>
 
     val (hypothesis, mark) = new Theorem(assumption).mark
 
-    conclusion(hypothesis) map {
-      (thm: Theorem) => new Theorem(Implies(assumption, thm.expression)).from(thm).unmark(mark)
+    catchFailedAttempts {
+      conclusion(hypothesis) map {
+        (thm: Theorem) => new Theorem(Implies(assumption, thm.expression)).from(thm).unmark(mark)
+      }
     }
   }
 
@@ -208,57 +227,66 @@ trait Rules { self: Theory =>
       case Implies(condition, body) => {
         val goal = new Goal(condition)
 
-        proof(goal) flatMap { (witness: Witness) =>
-          if (goal.accepts(witness)) {
-            Attempt.success(new Theorem(body).from(witness.theorem))
-          }
-          else {
-            Attempt.incorrectWitness
-          }
+        catchFailedAttempts {
+          for {
+            witness <- proof(goal)
+            theorem <- witness.extractTheorem(goal)
+          } yield new Theorem(body).from(theorem)
         }
       } 
       case _ => Attempt.fail("Could not apply rule implE on non-implication expression " + implication.expression + ".")
     }
 
-  def forallI(name: String, tpe: Type)(theorem: Variable => Attempt[Theorem]): Attempt[Theorem] = {
-    forallI(Variable.fresh(name, tpe).toVal)(theorem)
-  }
 
   def forallI(vd: ValDef)(theorem: Variable => Attempt[Theorem]): Attempt[Theorem] = {
-
-    theorem(vd.toVariable) map { (thm: Theorem) =>
-      new Theorem(Forall(Seq(vd), thm.expression)).from(thm)
+    catchFailedAttempts {
+      theorem(vd.toVariable) map { (thm: Theorem) =>
+        new Theorem(Forall(Seq(vd), thm.expression)).from(thm)
+      }
     }
   }
 
-  def forallI(first: ValDef, rest: ValDef*)(theorem: Seq[Variable] => Attempt[Theorem]): Attempt[Theorem] = {
-
-    val vds = first +: rest
-
-    theorem(vds.map(_.toVariable)) map { (thm: Theorem) =>
-      new Theorem(Forall(vds, thm.expression)).from(thm)
+  def forallI(vd1: ValDef, vd2: ValDef)
+             (theorem: (Variable, Variable) => Attempt[Theorem]): Attempt[Theorem] = {
+    catchFailedAttempts {
+      theorem(vd1.toVariable, vd2.toVariable) map { (thm: Theorem) =>
+        new Theorem(Forall(Seq(vd1, vd2), thm.expression)).from(thm)
+      }
     }
   }
 
-  def forallI(vars: Seq[(String, Type)])(theorem: Seq[Variable] => Attempt[Theorem]): Attempt[Theorem] = {
-    val vs = vars.map {
-      case (name, tpe) => Variable.fresh(name, tpe)
-    }
-
-    theorem(vs) map { (thm: Theorem) =>
-      new Theorem(Forall(vs.map(_.toVal), thm.expression)).from(thm)
+  def forallI(vd1: ValDef, vd2: ValDef, vd3: ValDef)
+             (theorem: (Variable, Variable, Variable) => Attempt[Theorem]): Attempt[Theorem] = {
+    catchFailedAttempts {
+      theorem(vd1.toVariable, vd2.toVariable, vd3.toVariable) map { (thm: Theorem) =>
+        new Theorem(Forall(Seq(vd1, vd2, vd3), thm.expression)).from(thm)
+      }
     }
   }
 
-  def forallI(tpe: Type, theorem: Theorem): Theorem = {
-    val x = Variable.fresh("x", tpe)
+  def forallI(vd1: ValDef, vd2: ValDef, vd3: ValDef, vd4: ValDef)
+             (theorem: (Variable, Variable, Variable, Variable) => Attempt[Theorem]): Attempt[Theorem] = {
+    catchFailedAttempts {
+      theorem(vd1.toVariable, vd2.toVariable, vd3.toVariable, vd4.toVariable) map { (thm: Theorem) =>
+        new Theorem(Forall(Seq(vd1, vd2, vd3, vd4), thm.expression)).from(thm)
+      }
+    }
+  }
 
-    new Theorem(Forall(Seq(x.toVal), theorem.expression)).from(theorem)
+  def forallI(vds: Seq[ValDef])(theorem: Seq[Variable] => Attempt[Theorem]): Attempt[Theorem] = {
+    catchFailedAttempts {
+      theorem(vds.map(_.toVariable)) map { (thm: Theorem) =>
+        new Theorem(Forall(vds, thm.expression)).from(thm)
+      }
+    }
   }
 
   def forallE(quantified: Theorem)(first: Expr, rest: Expr*): Attempt[Theorem] = forallE(quantified, first +: rest)
 
   def forallE(quantified: Theorem, terms: Seq[Expr]): Attempt[Theorem] = quantified.expression match {
+    // TODO: Be less strict here. What if less arguments are given than quantified variables?
+    //       What if more are given and `expression` is also a Forall-quantified expression?
+
     case Forall(defs, expression) if terms.size == defs.size => {
 
       val substitutions = defs.zip(terms).toMap
@@ -339,6 +367,20 @@ trait Rules { self: Theory =>
     new Theorem(Equals(Equals(a, b), And(Implies(a, b), Implies(b, a))))
   }
 
+  def transitivity(tpe: Type): Attempt[Theorem] = {
+    if (tpe == Untyped) {
+      Attempt.typeError("transitivity", tpe)
+    }
+    else {
+      val a = Variable.fresh("a", tpe)
+      val b = Variable.fresh("b", tpe)
+      val c = Variable.fresh("c", tpe)
+
+      Attempt.success(new Theorem(Forall(Seq(a, b, c).map(_.toVal),
+        Implies(And(Equals(a, b), Equals(b, c)), Equals(a, c)))))
+    }
+  }
+
   def transitivity(a: Expr, b: Expr, c: Expr)
     (aEqualsB: Goal => Attempt[Witness], bEqualsC: Goal => Attempt[Witness]): Attempt[Theorem] = {
 
@@ -353,22 +395,23 @@ trait Rules { self: Theory =>
     val goalAEqualsB = new Goal(Equals(a, b))
     val goalBEqualsC = new Goal(Equals(b, c))
 
-    aEqualsB(goalAEqualsB) flatMap { (wAB: Witness) =>
-      if (!goalAEqualsB.accepts(wAB)) {
-        Attempt.incorrectWitness
-      }
-      else {
-        bEqualsC(goalBEqualsC) flatMap { (wBC: Witness) =>
-          if (!goalBEqualsC.accepts(wBC)) {
-            Attempt.incorrectWitness
-          }
-          else {
-            Attempt.success(new Theorem(Equals(a, c)).from(Seq(wAB.theorem, wBC.theorem)))
-          }
-        }
-      }
+    val attemptAB = catchFailedAttempts { 
+        for {
+        wAB <- aEqualsB(goalAEqualsB)
+        tAB <- wAB.extractTheorem(goalAEqualsB)
+      } yield tAB
     }
 
+    val attemptBC = catchFailedAttempts {
+      for {
+        wBC <- bEqualsC(goalBEqualsC)
+        tBC <- wBC.extractTheorem(goalBEqualsC)
+      } yield tBC
+    }
+
+    Attempt.all(Seq(attemptAB, attemptBC)) map { case Seq(tAB, tBC) =>
+      new Theorem(Equals(a, c)).from(Seq(tAB, tBC))
+    }
   }
 
   /** Truth.
@@ -377,6 +420,15 @@ trait Rules { self: Theory =>
    */
   lazy val truth: Theorem = new Theorem(BooleanLiteral(true))
 
+  // TODO: Should we get rid of this ? Seems a bit like a hack.
+
+  /** Falsitude.
+   *
+   * Contains the `Theorem` : `false`. The theorem, or any theorem
+   * derived from it, will never be globally valid.
+   *
+   * Could be used while developing proofs to momentarily assume anything.
+   */
   lazy val absurd: Theorem = {
 
     // We purposely ignore the mark. The Theorem will never be globally valid. 
@@ -385,12 +437,21 @@ trait Rules { self: Theory =>
     thm
   }
 
+  /** Excluded middle.
+   *
+   * Contains the `Theorem`: `∀x: Boolean. x ∨ ¬x`.
+   */
   lazy val excludedMiddle: Theorem = {
     val x = Variable.fresh("x", BooleanType)
 
     new Theorem(Forall(Seq(x.toVal), Or(x, Not(x))))
   }
 
+  /** Excluded middle.
+   *
+   * States that the expression `expr` of type `Boolean`
+   * is either `true` or `false`.
+   */
   def excludedMiddle(expr: Expr): Attempt[Theorem] = {
     if (expr.getType == BooleanType) {
       Attempt.success(new Theorem(Or(expr, Not(expr))))
@@ -471,13 +532,11 @@ trait Rules { self: Theory =>
 
     val goal = new Goal(Equals(original, replacement))
 
-    equalityProof(goal) flatMap { (witness: Witness) =>
-      if (goal.accepts(witness)) {
-        Attempt.success(new Theorem(focus.set(replacement)).from(Seq(statement, witness.theorem)))
-      }
-      else {
-        Attempt.incorrectWitness
-      }
+    catchFailedAttempts {
+      for {
+        witness <- equalityProof(goal)
+        theorem <- witness.extractTheorem(goal)
+      } yield new Theorem(focus.set(replacement)).from(Seq(statement, theorem))
     }
   }
 }

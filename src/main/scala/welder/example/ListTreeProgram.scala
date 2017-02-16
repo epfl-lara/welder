@@ -158,7 +158,7 @@ object ListTreeProgram {
   val tA = TypeParameter.fresh("A")
   val tB = TypeParameter.fresh("B")
 
-  lazy val mapCommutesWithConcatenate = forallI("f" :: (tA =>: tB), "bs" :: T(list)(tA)) { case Seq(f, bs) =>
+  lazy val mapCommutesWithConcatenate = forallI("f" :: (tA =>: tB), "bs" :: T(list)(tA)) { case (f, bs) =>
     def mapCommutes(as: Expr) =
       E(listMap)(tA, tB)(E(concatenate)(tA)(as, bs), f) ===
       E(concatenate)(tB)(E(listMap)(tA, tB)(as, f), E(listMap)(tA, tB)(bs, f))
@@ -191,7 +191,7 @@ object ListTreeProgram {
     f(a, f(b, c)) === f(f(a, b), c) 
   }
 
-  lazy val splitListFold = forallI("f" :: ((tA, tA) =>: tA), "ys" :: T(list)(tA)) { case Seq(f, ys) => 
+  lazy val splitListFold = forallI("f" :: ((tA, tA) =>: tA), "ys" :: T(list)(tA)) { case (f, ys) => 
     implI(isAssoc(f, tA)) { (fIsAssoc: Theorem) =>
       implI(ys.isInstOf(T(cons)(tA))) { (ysNonEmpty: Theorem) =>
         
@@ -295,7 +295,7 @@ object ListTreeProgram {
 
   lazy val reformulatedFoldTheorem = forallI("f" :: ((tA, tA) =>: tA)) { case f => 
     implI(isAssoc(f, tA)) { (fIsAssoc: Theorem) =>
-      forallI("t1" :: T(tree)(tA), "t2" :: T(tree)(tA)) { case Seq(t1, t2) =>
+      forallI("t1" :: T(tree)(tA), "t2" :: T(tree)(tA)) { case (t1, t2) =>
         implI(E(toList)(tA)(t1) === E(toList)(tA)(t2)) { (tsEqual: Theorem) =>
 
           val applied1 = forallE(implE(forallE(foldTheorem)(f))(_.by(fIsAssoc)))(t1)
