@@ -21,8 +21,12 @@ trait Interpolations { self: Theory =>
 
     import lexical._
 
-    def apply(sc: StringContext, args: Seq[Any]): ParseResult[Expr] = {
+    def parseExpr(sc: StringContext, args: Seq[Any]): ParseResult[Expr] = {
       phrase(expression(Map()))(getReader(sc, args))
+    }
+
+    def parseType(sc: StringContext, args: Seq[Any]): ParseResult[Type] = {
+      phrase(inoxType)(getReader(sc, args))
     }
   }
 
@@ -37,7 +41,9 @@ trait Interpolations { self: Theory =>
   implicit class ExpressionInterpolator(sc: StringContext) {
 
     def e(args: Any*): Attempt[Expr] = {
-      ExpressionParser(sc, args).map(Attempt.success(_)).getOrElse(Attempt.fail("No parse."))
+      ExpressionParser.parseExpr(sc, args)
+                      .map(Attempt.success(_))
+                      .getOrElse(Attempt.fail("No parse."))
     }
 
     def r(args: Any*): List[ExpressionParser.lexical.Token] = {
@@ -49,6 +55,12 @@ trait Interpolations { self: Theory =>
       }
 
       go(reader)
+    }
+
+    def t(args: Any*): Attempt[Type] = {
+      ExpressionParser.parseType(sc, args)
+                      .map(Attempt.success(_))
+                      .getOrElse(Attempt.fail("No parse."))
     }
   }
 }
@@ -88,7 +100,9 @@ class InoxLexer(val program: InoxProgram) extends StdLexical with StringContextL
   case class RawExpr(expr: Expr) extends Token { def chars = expr.toString }
   case class RawType(tpe: Type) extends Token { def chars = tpe.toString }
 
-  override def token: Parser[Token] = punctuation | parens | operator | quantifier | super.token
+  override def token: Parser[Token] = keywords | punctuation | parens | operator | quantifier | super.token
+
+  val keywords = acceptSeq("=>") ^^^ Keyword("=>")
 
   val comma: Parser[Token] = ',' ^^^ Punctuation(',')
   val dot: Parser[Token] = '.' ^^^ Punctuation('.')
@@ -154,26 +168,102 @@ class InoxParser(val program: InoxProgram) extends StdTokenParsers {
     case RawIdentifier(i) => (i, i.uniqueName)
   })
 
-  lazy val inoxType: Parser[Type] = {
+  lazy val inoxType: Parser[Type] = rep1sep(argumentTypes | uniqueType, elem(Keyword("=>"))) ^^ {
+    case tss => tss.reverse match {
+      case returnTypes :: rest => {
+        val retType = returnTypes match {
+          case Seq(t) => t
+          case ts     => TupleType(ts)
+        }
+        rest.foldLeft(retType) { case (to, froms) => FunctionType(froms, to) }
+      }
+      case Nil => program.ctx.reporter.fatalError("inoxType: Empty list of types.")  // Should never happen.
+    }
+  }
 
-    // TODO: Complete this.
-    val basicTypes = Seq(
-      "Boolean" -> BooleanType, 
-      "BigInt" -> IntegerType)
+  lazy val uniqueType: Parser[List[Type]] = (basicTypes | adtType | compoundType | rawType | parensType) ^^ {
+    case t => List(t)
+  }
+
+  lazy val rawType: Parser[Type] = acceptMatch("Not a type.", {
+    case RawType(t) => t
+  })
+
+  lazy val argumentTypes: Parser[List[Type]] = p('(') ~> rep1sep(inoxType, p(',')) <~ p(')')
+
+  lazy val parensType: Parser[Type] = p('(') ~> inoxType <~ p(')')
+
+  lazy val basicTypes: Parser[Type] = {
+
+    val table = Seq(
+      "Boolean" -> BooleanType,
+      "BigInt"  -> IntegerType,
+      "Char"    -> CharType,
+      "Int"     -> Int32Type,
+      "Real"    -> RealType,
+      "String"  -> StringType,
+      "Unit"    -> UnitType)
 
     val conversion: PartialFunction[Token, Type] =
-      basicTypes.map({ case (name, tpe) => Identifier(name) -> tpe }).toMap
+      table.map({ case (name, tpe) => Identifier(name) -> tpe }).toMap
     acceptMatch("Unknown type.", conversion)
   }
 
+  lazy val typeParameters: Parser[List[Type]] = p('[') ~> rep1sep(inoxType, p(',')) <~ p(']')
+
+  lazy val adtType: Parser[Type] = {
+
+    val adtTable = program.symbols.adts.toSeq.map({
+      case (i, d) => i.name -> d 
+    }).toMap
+
+    val adtDefinition: Parser[ADTDefinition] = acceptMatch("Unknown ADT.", {
+      case Identifier(name) if adtTable.contains(name) => adtTable(name)
+      case RawIdentifier(i) if program.symbols.adts.contains(i) => program.symbols.adts(i)
+    })
+
+    def params(n: Int): Parser[List[Type]] = {
+      if (n == 0) {
+        success(List())
+      }
+      else {
+        typeParameters ^? {
+          case ts if ts.size == n => ts
+        }
+      }
+    }
+
+    for {
+      d <- adtDefinition
+      ts <- params(d.tparams.size)
+    } yield d.typed(ts)(program.symbols).toType
+  }
+
+  lazy val compoundType: Parser[Type] = {
+    val map = elem(Identifier("Map")) ~> typeParameters ^? {
+      case List(k, v) => MapType(k, v)
+    }
+
+    val set = elem(Identifier("Set")) ~> typeParameters ^? {
+      case List(v) => SetType(v)
+    }
+
+    val bag = elem(Identifier("Bag")) ~> typeParameters ^? {
+      case List(v) => BagType(v)
+    }
+
+    map | set | bag
+  }
+
+  // TODO: Accept binders with different types ?
   def forallExpr(implicit store: Store): Parser[Expr] = for {
     _ <- elem(Quantifier("forall"))
-    (i, n) <- inoxIdentifier
+    ins <- rep1sep(inoxIdentifier, p(','))
     _ <- elem(Punctuation(':'))
     t <- inoxType
     _ <- elem(Punctuation('.'))
-    e <- expression(store + (n -> new Variable(i, t, Set())))
-  } yield Forall(Seq(ValDef(i, t)), e)
+    e <- expression(store ++ ins.map({ case (i, n) => n -> new Variable(i, t, Set()) }))
+  } yield Forall(ins.map(_._1).map(ValDef(_, t)), e)
 
   def operatorExpr(implicit store: Store): Parser[Expr] = {
 
