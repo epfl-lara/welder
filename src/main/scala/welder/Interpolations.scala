@@ -22,7 +22,7 @@ trait Interpolations { self: Theory =>
     import lexical._
 
     def apply(sc: StringContext, args: Seq[Any]): ParseResult[Expr] = {
-      phrase(expression)(getReader(sc, args))
+      phrase(expression(Map()))(getReader(sc, args))
     }
   }
 
@@ -57,7 +57,7 @@ class InoxLexer(val program: InoxProgram) extends StdLexical with StringContextL
 
   import program.trees._
 
-  lazy val opTable: Seq[Seq[(String, (Expr, Expr) => Expr)]] = Seq(
+  val opTable: Seq[Seq[(String, (Expr, Expr) => Expr)]] = Seq(
 
     Seq("*" -> { (a: Expr, b: Expr) => Times(a, b) },
         "/" -> { (a: Expr, b: Expr) => Division(a, b) },
@@ -81,24 +81,28 @@ class InoxLexer(val program: InoxProgram) extends StdLexical with StringContextL
   val operators = opTable.flatten.map(_._1)
 
   case class Parenthesis(parenthesis: Char) extends Token { def chars = parenthesis.toString }
-  case object Comma extends Token { def chars = "," }
+  case class Punctuation(punctuation: Char) extends Token { def chars = punctuation.toString }
+  case class Quantifier(quantifier: String) extends Token { def chars = quantifier }
   case class Operator(operator: String) extends Token { def chars = operator }
   case class RawIdentifier(identifier: inox.Identifier) extends Token { def chars = identifier.name }
   case class RawExpr(expr: Expr) extends Token { def chars = expr.toString }
   case class RawType(tpe: Type) extends Token { def chars = tpe.toString }
 
-  override def token: Parser[Token] = comma | parens | operator | super.token
+  override def token: Parser[Token] = punctuation | parens | operator | quantifier | super.token
 
-  def comma: Parser[Token] = ',' ^^^ Comma
+  val comma: Parser[Token] = ',' ^^^ Punctuation(',')
+  val dot: Parser[Token] = '.' ^^^ Punctuation('.')
+  val colon: Parser[Token] = ':' ^^^ Punctuation(':')
+  val punctuation: Parser[Token] = comma | dot | colon
 
-  def operator: Parser[Token] = {
+  val quantifier: Parser[Token] = '∀' ^^^ Quantifier("forall")
 
-    operators.map(acceptSeq(_)).reduce(_ | _) ^^ { (xs:List[Char]) =>
+  val operator: Parser[Token] =
+    operators.map(acceptSeq(_)).reduce(_ | _) ^^ { (xs: List[Char]) =>
       Operator(xs.mkString)
     }
-  }
 
-  def parens: Parser[Token] = accept("parenthesis", {
+  val parens: Parser[Token] = accept("parenthesis", {
       case c@('[' | ']' | '(' | ')' | '{' | '}') => Parenthesis(c)
     })
 
@@ -124,20 +128,54 @@ class InoxParser(val program: InoxProgram) extends StdTokenParsers {
   import program.trees._
   import lexical._
 
-  lazy val expression: Parser[Expr] = operatorExpr  // Do not add stuff here.
+  type Store = Map[String, Variable]
 
-  lazy val literalExpr: Parser[Expr] = acceptMatch("literal", {
+  def expression(implicit store: Store): Parser[Expr] = forallExpr | operatorExpr
+
+  val literalExpr: Parser[Expr] = acceptMatch("literal", {
     case StringLit(s) => StringLiteral(s)
     case NumericLit(n) => IntegerLiteral(BigInt(n))
     case RawExpr(e) => e
   })
 
-  def p(p: Char): Parser[Token] = elem(Parenthesis(p))
+  def variableExpr(implicit store: Store): Parser[Variable] = acceptMatch("Unknown identifier.", {
+    case Identifier(name) if store.contains(name) => store(name)
+    case RawIdentifier(i) if store.contains(i.uniqueName) => store(i.uniqueName)
+  })
 
-  lazy val parensExpr: Parser[Expr] = (p('(') ~> expression <~ p(')')) |
-                                      (p('{') ~> expression <~ p('}'))
+  def p(p: Char): Parser[Token] = elem(Parenthesis(p)) | elem(Punctuation(p))
 
-  lazy val operatorExpr: Parser[Expr] = {
+  def parensExpr(implicit store: Store): Parser[Expr] = 
+    (p('(') ~> expression <~ p(')')) |
+    (p('{') ~> expression <~ p('}'))
+
+  lazy val inoxIdentifier: Parser[(inox.Identifier, String)] = acceptMatch("Identifier.", {
+    case Identifier(name) => (inox.FreshIdentifier(name), name)
+    case RawIdentifier(i) => (i, i.uniqueName)
+  })
+
+  lazy val inoxType: Parser[Type] = {
+
+    // TODO: Complete this.
+    val basicTypes = Seq(
+      "Boolean" -> BooleanType, 
+      "BigInt" -> IntegerType)
+
+    val conversion: PartialFunction[Token, Type] =
+      basicTypes.map({ case (name, tpe) => Identifier(name) -> tpe }).toMap
+    acceptMatch("Unknown type.", conversion)
+  }
+
+  def forallExpr(implicit store: Store): Parser[Expr] = for {
+    _ <- elem(Quantifier("forall"))
+    (i, n) <- inoxIdentifier
+    _ <- elem(Punctuation(':'))
+    t <- inoxType
+    _ <- elem(Punctuation('.'))
+    e <- expression(store + (n -> new Variable(i, t, Set())))
+  } yield Forall(Seq(ValDef(i, t)), e)
+
+  def operatorExpr(implicit store: Store): Parser[Expr] = {
 
     def withPrio(oneOp: Parser[(Expr, Expr) => Expr], lessPrio: Parser[Expr]) = {
       lessPrio ~ rep(oneOp ~ lessPrio) ^^ { case lhs ~ opsAndRhs => 
@@ -146,7 +184,7 @@ class InoxParser(val program: InoxProgram) extends StdTokenParsers {
     }
 
     // TODO: Add stuff here.
-    val zero = literalExpr | parensExpr
+    val zero = forallExpr | literalExpr | variableExpr | parensExpr
 
     opTable.foldLeft(zero) {
       case (lessPrio, ops) => {
