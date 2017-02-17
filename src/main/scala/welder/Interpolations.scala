@@ -11,6 +11,8 @@ import inox.Identifier
 import inox.trees
 import inox.InoxProgram
 
+import welder.util.StringContextLexer
+
 trait Interpolations { self: Theory =>
   
   import program.trees._
@@ -20,7 +22,7 @@ trait Interpolations { self: Theory =>
     import lexical._
 
     def apply(sc: StringContext, args: Seq[Any]): ParseResult[Expr] = {
-      phrase(expression)(readerFrom(sc, args))
+      phrase(expression)(getReader(sc, args))
     }
   }
 
@@ -39,7 +41,7 @@ trait Interpolations { self: Theory =>
     }
 
     def r(args: Any*): List[ExpressionParser.lexical.Token] = {
-      val reader = ExpressionParser.lexical.readerFrom(sc, args)
+      val reader = ExpressionParser.lexical.getReader(sc, args)
 
       def go[A](r: Reader[A]): List[A] = {
         if (r.atEnd) List()
@@ -51,7 +53,7 @@ trait Interpolations { self: Theory =>
   }
 }
 
-class InoxLexer(val program: InoxProgram) extends StdLexical {
+class InoxLexer(val program: InoxProgram) extends StdLexical with StringContextLexer {
 
   import program.trees._
 
@@ -83,6 +85,7 @@ class InoxLexer(val program: InoxProgram) extends StdLexical {
   case class Operator(operator: String) extends Token { def chars = operator }
   case class RawIdentifier(identifier: inox.Identifier) extends Token { def chars = identifier.name }
   case class RawExpr(expr: Expr) extends Token { def chars = expr.toString }
+  case class RawType(tpe: Type) extends Token { def chars = tpe.toString }
 
   override def token: Parser[Token] = comma | parens | operator | super.token
 
@@ -99,72 +102,15 @@ class InoxLexer(val program: InoxProgram) extends StdLexical {
       case c@('[' | ']' | '(' | ')' | '{' | '}') => Parenthesis(c)
     })
 
-  def apply(text: String): ParseResult[Any] = {
-    token(new CharSequenceReader(text))
-  }
-
-  def readerFrom(sc: StringContext, args: Seq[Any]): Reader[Token] = {
-    
-    val stringReaders = sc.parts.map(new Scanner(_))
-    
-    val readers = if (args.isEmpty) {
-      stringReaders
-    } else {
-      val argsReaders = args.map((x: Any) => uniquely(anyToToken(x)))
-
-      println(sc.parts.mkString(", "))
-      println(args.mkString(", "))
-      
-
-      stringReaders.head +: {
-        argsReaders.zip(stringReaders.tail).map {
-          case (ar, sr) => readerAndThen(ar, sr)
-        }
-      }
-    }
-
-    readers.reduce(readerAndThen(_, _))
-  }
-
-  private def anyToToken(x: Any): Token = x match {
+  override def argToToken(x: Any): Token = x match {
     case s: Symbol => Identifier(s.toString)
     case i: BigInt => NumericLit(i.toString)
     case i: Int    => NumericLit(i.toString)
     case s: String => StringLit(s)
     case i: inox.Identifier => RawIdentifier(i)
     case e: Expr => RawExpr(e)
+    case t: Type => RawType(t)
     case _ => ErrorToken("Invalid element: " + x)
-  }
-
-  private val empty = new Reader[Token] {
-    override def atEnd: Boolean = true
-    override def first: Token = throw new NoSuchMethodError()
-    override def pos: Position = NoPosition
-    override def rest: Reader[Token] = throw new NoSuchMethodError()
-  }
-
-  private def uniquely(x: Token) = new Reader[Token] {
-    override def atEnd: Boolean = false
-    override def first: Token = x
-    override def pos: Position = NoPosition
-    override def rest: Reader[Token] = empty
-  }
-
-  private def readerAndThen(a: Reader[Token], b: => Reader[Token]): Reader[Token] = {
-
-    if (a.atEnd) {
-      b
-    }
-    else {
-      new Reader[Token] {
-        override def atEnd: Boolean = false
-        override def first: Token = a.first
-        override def pos: Position = a.pos
-        override def rest: Reader[Token] = {
-          readerAndThen(a.rest, b)
-        }
-      }
-    }
   }
 }
 
