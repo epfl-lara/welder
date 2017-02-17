@@ -13,6 +13,7 @@ trait Theory
      with Arithmetic
      with Equational
      with Evaluators
+     with Interpolations
      with Paths
      with Rules
      with Solvers { self =>
