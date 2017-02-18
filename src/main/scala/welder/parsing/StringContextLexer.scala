@@ -1,5 +1,5 @@
 package welder
-package util
+package parsing
 
 import scala.util.parsing.combinator._
 import scala.util.parsing.combinator.lexical._
