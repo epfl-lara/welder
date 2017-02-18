@@ -21,6 +21,10 @@ trait Interpolations { self: Theory =>
     def parseType(sc: StringContext, args: Seq[Any]): ParseResult[Type] = {
       phrase(inoxType)(getReader(sc, args))
     }
+
+    def parseValDef(sc: StringContext, args: Seq[Any]): ParseResult[ValDef] = {
+      phrase(valDef)(getReader(sc, args))
+    }
   }
 
   implicit class ExpressionInterpolator(sc: StringContext) {
@@ -43,6 +47,13 @@ trait Interpolations { self: Theory =>
       parse.map({ (withHole: Expr) =>
         (x: Expr) => exprOps.replaceFromSymbols(Map((hole -> x)), withHole)
       })
+    }
+
+    def v(args: Any*): Attempt[ValDef] = {
+      ExpressionParser
+        .parseValDef(sc, args)
+        .map(Attempt.success(_))
+        .getOrElse(Attempt.fail("No parse."))
     }
 
     // TODO: Remove. Just useful for internal debug.

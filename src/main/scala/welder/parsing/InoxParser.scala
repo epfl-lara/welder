@@ -129,16 +129,22 @@ class InoxParser(val program: InoxProgram) extends StdTokenParsers {
     map | set | bag
   }
 
+  lazy val valDef: Parser[ValDef] = for {
+    (i, _) <- inoxIdentifier
+    _ <- p(':')
+    t <- inoxType
+  } yield ValDef(i, t)
+
   lazy val valDefs: Parser[List[(ValDef, String)]] = for {
     ins <- rep1sep(inoxIdentifier, p(','))
-    _ <- elem(Punctuation(':'))
+    _ <- p(':')
     t <- inoxType
   } yield ins.map({ case (i, n) => (ValDef(i, t), n) })
 
   def forallExpr(implicit store: Store): Parser[Expr] = for {
     _ <- elem(Quantifier("forall"))
     vns <- rep1sep(valDefs, p(',')).map(_.flatten)
-    _ <- elem(Punctuation('.'))
+    _ <- p('.')
     e <- expression(store ++ vns.map({ case (vd, n) => n -> vd.toVariable }))
   } yield Forall(vns.map(_._1), e)
 
