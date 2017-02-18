@@ -14,8 +14,8 @@ trait Interpolations { self: Theory =>
 
     import lexical._
 
-    def parseExpr(sc: StringContext, args: Seq[Any]): ParseResult[Expr] = {
-      phrase(expression(Map()))(getReader(sc, args))
+    def parseExpr(sc: StringContext, args: Seq[Any], store: Store = Map()): ParseResult[Expr] = {
+      phrase(expression(store))(getReader(sc, args))
     }
 
     def parseType(sc: StringContext, args: Seq[Any]): ParseResult[Type] = {
@@ -23,20 +23,26 @@ trait Interpolations { self: Theory =>
     }
   }
 
-  // object ExpressionInterpolator {
-  //   lazy val functions: Map[String, Seq[Identifier]] = {
-  //     program.symbols.functions.keySet.groupBy(_.name).map({ case (n, is) =>
-  //       n -> is.toSeq
-  //     }).toMap
-  //   }
-  // }
-
   implicit class ExpressionInterpolator(sc: StringContext) {
 
     def e(args: Any*): Attempt[Expr] = {
-      ExpressionParser.parseExpr(sc, args)
-                      .map(Attempt.success(_))
-                      .getOrElse(Attempt.fail("No parse."))
+      ExpressionParser
+        .parseExpr(sc, args)
+        .map(Attempt.success(_))
+        .getOrElse(Attempt.fail("No parse."))
+    }
+
+    def c(args: Any*): Attempt[Expr => Expr] = {
+      val hole = Variable.fresh("_", Untyped)
+
+      val parse = ExpressionParser
+                    .parseExpr(sc, args, Map("_" -> hole))
+                    .map(Attempt.success(_))
+                    .getOrElse(Attempt.fail("No parse."))
+
+      parse.map({ (withHole: Expr) =>
+        (x: Expr) => exprOps.replaceFromSymbols(Map((hole -> x)), withHole)
+      })
     }
 
     def r(args: Any*): List[ExpressionParser.lexical.Token] = {
