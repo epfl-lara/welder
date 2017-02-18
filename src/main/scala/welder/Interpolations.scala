@@ -29,31 +29,28 @@ trait Interpolations { self: Theory =>
 
   implicit class ExpressionInterpolator(sc: StringContext) {
 
-    def e(args: Any*): Attempt[Expr] = {
-      ExpressionParser
-        .parseExpr(sc, args)
-        .map(Attempt.success(_))
-        .getOrElse(Attempt.fail("No parse."))
+    def fromParseResult[A](result: ExpressionParser.ParseResult[A]): Attempt[A] =
+      result match {
+        case ExpressionParser.NoSuccess(msg, _) => Attempt.fail(msg)
+        case ExpressionParser.Success(value, _) => Attempt.success(value)
+      }
+
+    def e(args: Any*): Expr = {
+      fromParseResult(ExpressionParser.parseExpr(sc, args))
     }
 
-    def c(args: Any*): Attempt[Expr => Expr] = {
+    def c(args: Any*): Expr => Expr = {
       val hole = Variable.fresh("_", Untyped)
 
-      val parse = ExpressionParser
-                    .parseExpr(sc, args, Map("_" -> hole))
-                    .map(Attempt.success(_))
-                    .getOrElse(Attempt.fail("No parse."))
+      val parse = fromParseResult(ExpressionParser.parseExpr(sc, args, Map("_" -> hole)))
 
       parse.map({ (withHole: Expr) =>
         (x: Expr) => exprOps.replaceFromSymbols(Map((hole -> x)), withHole)
       })
     }
 
-    def v(args: Any*): Attempt[ValDef] = {
-      ExpressionParser
-        .parseValDef(sc, args)
-        .map(Attempt.success(_))
-        .getOrElse(Attempt.fail("No parse."))
+    def v(args: Any*): ValDef = {
+      fromParseResult(ExpressionParser.parseValDef(sc, args))
     }
 
     // TODO: Remove. Just useful for internal debug.
@@ -70,10 +67,8 @@ trait Interpolations { self: Theory =>
       go(reader)
     }
 
-    def t(args: Any*): Attempt[Type] = {
-      ExpressionParser.parseType(sc, args)
-                      .map(Attempt.success(_))
-                      .getOrElse(Attempt.fail("No parse."))
+    def t(args: Any*): Type = {
+      fromParseResult(ExpressionParser.parseType(sc, args))
     }
   }
 }
