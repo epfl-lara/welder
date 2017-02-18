@@ -42,14 +42,14 @@ object GaussExample {
 
   // The property we want to prove, as a function of `n`.
   def property(n: Expr): Expr = {
-    E(sum)(n) === ((n * (n + E(BigInt(1)))) / E(BigInt(2)))
+    e"sum($n) == $n * ($n + 1) / 2"
   }
 
   // Call to natural induction.
   // The property we want to prove is defined just above.
   // The base expression is `0`.
   // The proof for the base case is trivial.
-  val gaussTheorem = naturalInduction(property(_), E(BigInt(0)), trivial) { 
+  val gaussTheorem = naturalInduction(property(_), e"0", trivial) { 
     case (ihs, goal) =>
       // `ihs` contains induction hypotheses
       // and `goal` contains the property that needs to be proven.
@@ -58,23 +58,14 @@ object GaussExample {
       // We bound it to `n` for clarity.
       val n = ihs.variable
 
-      // The expression for which we try to prove the property.
-      // We bound it for clarity as well.
-      val nPlus1 = n + E(BigInt(1))
-
-      // We then state the following simple lemma:
-      // `sum(n + 1) == sum(n) + (n + 1)`
-      val lemma = {
-        E(sum)(nPlus1) === (E(sum)(n) + nPlus1)
-      }
-
-      // `inox` is able to easily prove this property,
-      // given that `n` is greater than `0`.
-      val provenLemma: Theorem = prove(lemma, ihs.variableGreaterThanBase)
-
-      // We then state that we can prove the goal using the conjunction of
-      // our lemma and the induction hypothesis on `n`, i.e. :
-      // `sum(n) == (n * (n + 1)) / 2
-      goal.by(andI(provenLemma, ihs.propertyForVar))
+      // We implicitly show that the goal is met by showing that
+      // the following equalities hold. 
+      e"sum($n + 1)"                    ==|
+              ihs.variableGreaterThanBase |  // We use here the fact that n > 0.
+      e"sum($n) + ($n + 1)"             ==|
+                       ihs.propertyForVar |  // We use the induction hypothesis here.
+      e"($n * ($n + 1) / 2) + ($n + 1)" ==|
+                                  trivial |  // This step follows by simple arithmetic.
+      e"($n + 1) * ($n + 2) / 2"
   }
 }
