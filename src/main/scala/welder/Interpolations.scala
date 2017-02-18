@@ -1,3 +1,5 @@
+/* Copyright 2017 EPFL, Lausanne */
+
 package welder
 
 import inox.Identifier

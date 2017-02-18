@@ -1,3 +1,4 @@
+/* Copyright 2017 EPFL, Lausanne */
 
 import inox._
 
