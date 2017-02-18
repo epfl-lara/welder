@@ -7,6 +7,8 @@ import scala.util.parsing.combinator.token._
 
 import inox.InoxProgram
 
+// TODO: Infer types in some manner?
+
 class InoxParser(val program: InoxProgram) extends StdTokenParsers {
 
   type Tokens = InoxLexer
@@ -15,6 +17,8 @@ class InoxParser(val program: InoxProgram) extends StdTokenParsers {
 
   import program.trees._
   import lexical._
+
+  implicit val symbols = program.symbols
 
   type Store = Map[String, Variable]
 
@@ -83,17 +87,70 @@ class InoxParser(val program: InoxProgram) extends StdTokenParsers {
     acceptMatch("Unknown type.", conversion)
   }
 
-  lazy val typeParameters: Parser[List[Type]] = p('[') ~> rep1sep(inoxType, p(',')) <~ p(']')
+  lazy val fdTable = symbols.functions.toSeq.map({
+    case (i, fd) => i.name -> fd 
+  }).toMap
+
+  def funDef(implicit store: Store): Parser[FunDef] = acceptMatch("Unknown function.", {
+    case Identifier(name) if fdTable.contains(name) => fdTable(name)
+    case RawIdentifier(i) if symbols.functions.contains(i) => symbols.functions(i)
+  })
+
+  def arguments(implicit store: Store): Parser[List[Expr]] = 
+    (p('(') ~> repsep(expression, p(',')) <~ p(')')) |
+    (p('{') ~> (expression ^^ (List(_))) <~ p('}'))
+
+  def invocationExpr(implicit store: Store): Parser[Expr] = for {
+    fd <- funDef
+    otps <- opt(typeArguments)
+    if (otps.isEmpty || otps.get.size == fd.tparams.size)
+    args <- arguments
+    if (args.size == fd.params.size)
+  } yield otps match {
+    case Some(tps) => fd.typed(tps).applied(args)
+    case None      => try {
+      symbols.functionInvocation(fd, args)
+    } catch {
+      case e: Throwable => fd.typed.applied(args)
+    }
+  }
+
+  lazy val cstrTable = symbols.adts.toSeq.collect({
+    case (i, cstr: ADTConstructor) => i.name -> cstr
+  }).toMap
+
+  def cstrDef(implicit store: Store): Parser[ADTConstructor] = acceptMatch("Unknown constructor", {
+    case Identifier(name) if cstrTable.contains(name) => cstrTable(name)
+    case RawIdentifier(i) if symbols.adts.contains(i) && !symbols.adts(i).isSort =>
+      symbols.adts(i).asInstanceOf[ADTConstructor]
+  })
+
+  def constructorExpr(implicit store: Store): Parser[Expr] = for {
+    ct <- cstrDef
+    otps <- opt(typeArguments)
+    if (otps.isEmpty || otps.get.size == ct.tparams.size)
+    args <- arguments
+    if (args.size == ct.fields.size)
+  } yield otps match {
+    case Some(tps) => ADT(ct.typed(tps).toType, args)
+    case None      => try {
+      symbols.adtConstruction(ct, args)
+    } catch {
+      case e: Throwable => ADT(ct.typed.toType, args)
+    }
+  }
+
+  lazy val typeArguments: Parser[List[Type]] = p('[') ~> rep1sep(inoxType, p(',')) <~ p(']')
 
   lazy val adtType: Parser[Type] = {
 
-    val adtTable = program.symbols.adts.toSeq.map({
+    val adtTable = symbols.adts.toSeq.map({
       case (i, d) => i.name -> d 
     }).toMap
 
     val adtDefinition: Parser[ADTDefinition] = acceptMatch("Unknown ADT.", {
       case Identifier(name) if adtTable.contains(name) => adtTable(name)
-      case RawIdentifier(i) if program.symbols.adts.contains(i) => program.symbols.adts(i)
+      case RawIdentifier(i) if symbols.adts.contains(i) => symbols.adts(i)
     })
 
     def params(n: Int): Parser[List[Type]] = {
@@ -101,7 +158,7 @@ class InoxParser(val program: InoxProgram) extends StdTokenParsers {
         success(List())
       }
       else {
-        typeParameters ^? {
+        typeArguments ^? {
           case ts if ts.size == n => ts
         }
       }
@@ -110,19 +167,19 @@ class InoxParser(val program: InoxProgram) extends StdTokenParsers {
     for {
       d <- adtDefinition
       ts <- params(d.tparams.size)
-    } yield d.typed(ts)(program.symbols).toType
+    } yield d.typed(ts).toType
   }
 
   lazy val compoundType: Parser[Type] = {
-    val map = elem(Identifier("Map")) ~> typeParameters ^? {
+    val map = elem(Identifier("Map")) ~> typeArguments ^? {
       case List(k, v) => MapType(k, v)
     }
 
-    val set = elem(Identifier("Set")) ~> typeParameters ^? {
+    val set = elem(Identifier("Set")) ~> typeArguments ^? {
       case List(v) => SetType(v)
     }
 
-    val bag = elem(Identifier("Bag")) ~> typeParameters ^? {
+    val bag = elem(Identifier("Bag")) ~> typeArguments ^? {
       case List(v) => BagType(v)
     }
 
@@ -157,7 +214,7 @@ class InoxParser(val program: InoxProgram) extends StdTokenParsers {
     }
 
     // TODO: Add stuff here.
-    val zero = forallExpr | literalExpr | variableExpr | parensExpr
+    val zero = forallExpr | invocationExpr | constructorExpr | literalExpr | variableExpr | parensExpr
 
     opTable.foldLeft(zero) {
       case (lessPrio, ops) => {
