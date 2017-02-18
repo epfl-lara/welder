@@ -24,7 +24,9 @@ class InoxParser(val program: InoxProgram) extends StdTokenParsers {
 
   type Store = Map[String, Variable]
 
-  def expression(implicit store: Store): Parser[Expr] = forallExpr | operatorExpr
+  def expression(implicit store: Store): Parser[Expr] = greedyRight | operatorExpr
+
+  def greedyRight(implicit store: Store): Parser[Expr] = forallExpr | lambdaExpr
 
   val literalExpr: Parser[Expr] = acceptMatch("literal", {
     case StringLit(s) => StringLiteral(s)
@@ -207,6 +209,13 @@ class InoxParser(val program: InoxProgram) extends StdTokenParsers {
     e <- expression(store ++ vns.map({ case (vd, n) => n -> vd.toVariable }))
   } yield Forall(vns.map(_._1), e)
 
+  def lambdaExpr(implicit store: Store): Parser[Expr] = for {
+    _ <- elem(Quantifier("lambda"))
+    vns <- rep1sep(valDefs, p(',')).map(_.flatten)
+    _ <- p('.')
+    e <- expression(store ++ vns.map({ case (vd, n) => n -> vd.toVariable }))
+  } yield Lambda(vns.map(_._1), e)
+
   def operatorExpr(implicit store: Store): Parser[Expr] = {
 
     def withPrio(oneOp: Parser[(Expr, Expr) => Expr], lessPrio: Parser[Expr]) = {
@@ -216,7 +225,7 @@ class InoxParser(val program: InoxProgram) extends StdTokenParsers {
     }
 
     // TODO: Add stuff here.
-    val zero = forallExpr | invocationExpr | constructorExpr | literalExpr | variableExpr | parensExpr
+    val zero = greedyRight | invocationExpr | constructorExpr | literalExpr | variableExpr | parensExpr
 
     opTable.foldLeft(zero) {
       case (lessPrio, ops) => {
