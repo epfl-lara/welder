@@ -10,7 +10,7 @@ trait Interpolations { self: Theory =>
   
   import program.trees._
 
-  object ExpressionParser extends InoxParser(program) {
+  private object ExpressionParser extends InoxParser(program) {
 
     import lexical._
 
@@ -45,7 +45,8 @@ trait Interpolations { self: Theory =>
       })
     }
 
-    def r(args: Any*): List[ExpressionParser.lexical.Token] = {
+    // TODO: Remove. Just useful for internal debug.
+    def r(args: Any*): List[Any] = {
       val reader = ExpressionParser.lexical.getReader(sc, args)
 
       import scala.util.parsing.input.Reader 
