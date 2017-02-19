@@ -11,6 +11,8 @@ import inox.InoxProgram
 
 class InoxLexer(val program: InoxProgram) extends StdLexical with StringContextLexer {
 
+  reserved ++= Seq("true", "false")
+
   import program.trees._
 
   val opTable: Seq[Seq[(String, (Expr, Expr) => Expr)]] = Seq(
@@ -47,7 +49,9 @@ class InoxLexer(val program: InoxProgram) extends StdLexical with StringContextL
   override def token: Parser[Token] = keywords | punctuation | parens | operator | quantifier | super.token
 
   val keywords = acceptSeq("=>") ^^^ Keyword("=>") |
-                 ('.' <~ not(whitespaceChar)) ^^^ Keyword(".")
+                 ('.' <~ not(whitespaceChar)) ^^^ Keyword(".") |
+                 acceptSeq("true") ^^^ Keyword("true") |
+                 acceptSeq("false") ^^^ Keyword("false")
 
   val comma: Parser[Token] = ',' ^^^ Punctuation(',')
   val dot: Parser[Token] = '.' ^^^ Punctuation('.')

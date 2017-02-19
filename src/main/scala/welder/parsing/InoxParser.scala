@@ -28,8 +28,7 @@ class InoxParser(val program: InoxProgram) extends StdTokenParsers {
   def kw(s: String): Parser[Token] = elem(Keyword(s))
 
   def expression(implicit store: Store): Parser[Expr] = greedyRight | operatorExpr
-  def nonOperatorExpr(implicit store: Store): Parser[Expr] =
-    greedyRight | selectionExpr
+  def nonOperatorExpr(implicit store: Store): Parser[Expr] = greedyRight | selectionExpr
 
   def selectableExpr(implicit store: Store): Parser[Expr] = withApplication {
     invocationExpr | constructorExpr | literalExpr | variableExpr | parensExpr
@@ -87,6 +86,8 @@ class InoxParser(val program: InoxProgram) extends StdTokenParsers {
   def greedyRight(implicit store: Store): Parser[Expr] = forallExpr | lambdaExpr
 
   val literalExpr: Parser[Expr] = acceptMatch("literal", {
+    case Keyword("true")  => BooleanLiteral(true)
+    case Keyword("false") => BooleanLiteral(false)
     case StringLit(s) => StringLiteral(s)
     case NumericLit(n) => IntegerLiteral(BigInt(n))
     case RawExpr(e) => e
