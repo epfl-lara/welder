@@ -46,7 +46,8 @@ class InoxLexer(val program: InoxProgram) extends StdLexical with StringContextL
 
   override def token: Parser[Token] = keywords | punctuation | parens | operator | quantifier | super.token
 
-  val keywords = acceptSeq("=>") ^^^ Keyword("=>")
+  val keywords = acceptSeq("=>") ^^^ Keyword("=>") |
+                 ('.' <~ not(whitespaceChar)) ^^^ Keyword(".")
 
   val comma: Parser[Token] = ',' ^^^ Punctuation(',')
   val dot: Parser[Token] = '.' ^^^ Punctuation('.')

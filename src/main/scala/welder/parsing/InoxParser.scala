@@ -24,7 +24,65 @@ class InoxParser(val program: InoxProgram) extends StdTokenParsers {
 
   type Store = Map[String, Variable]
 
+  def p(p: Char): Parser[Token] = elem(Parenthesis(p)) | elem(Punctuation(p))
+  def kw(s: String): Parser[Token] = elem(Keyword(s))
+
   def expression(implicit store: Store): Parser[Expr] = greedyRight | operatorExpr
+  def nonOperatorExpr(implicit store: Store): Parser[Expr] =
+    greedyRight | selectionExpr
+
+  def selectableExpr(implicit store: Store): Parser[Expr] = withApplication {
+    invocationExpr | constructorExpr | literalExpr | variableExpr | parensExpr
+  }
+
+  def withApplication(exprParser: Parser[Expr])(implicit store: Store): Parser[Expr] =
+    for {
+      expr <- exprParser
+      argss <- rep(arguments) 
+    } yield {
+      argss.foldLeft(expr) {
+        case (acc, args) => Application(acc, args)
+      }
+    }
+
+  def selectionExpr(implicit store: Store): Parser[Expr] = {
+      
+    val selector = for {
+      i <- selectorIdentifier
+      argss <- rep(arguments) 
+    } yield { (expr: Expr) =>
+      val zero: Expr = ADTSelector(expr, i)
+
+      argss.foldLeft(zero) {
+        case (acc, args) => Application(acc, args)
+      }
+    }
+
+    val asInstOf = for {
+      _ <- elem(Identifier("asInstanceOf"))
+      _ <- p('[')
+      tpe <- inoxType
+      _ <- p(']')
+    } yield { (x: Expr) => AsInstanceOf(x, tpe) }
+
+    val isInstOf = for {
+      _ <- elem(Identifier("isInstanceOf"))
+      _ <- p('[')
+      tpe <- inoxType
+      _ <- p(']')
+    } yield { (x: Expr) => IsInstanceOf(x, tpe) }
+
+    selectableExpr ~ rep(kw(".") ~> (asInstOf | isInstOf | selector)) ^^ {
+      case expr ~ funs => funs.foldLeft(expr) {
+        case (acc, f) => f(acc)
+      }
+    }
+  }
+
+  lazy val selectorIdentifier: Parser[inox.Identifier] = acceptMatch("Selector identifier.", {
+    case Identifier(name) => inox.FreshIdentifier(name)
+    case RawIdentifier(i) => i
+  })
 
   def greedyRight(implicit store: Store): Parser[Expr] = forallExpr | lambdaExpr
 
@@ -39,8 +97,6 @@ class InoxParser(val program: InoxProgram) extends StdTokenParsers {
     case RawIdentifier(i) if store.contains(i.uniqueName) => store(i.uniqueName)
   })
 
-  def p(p: Char): Parser[Token] = elem(Parenthesis(p)) | elem(Punctuation(p))
-
   def parensExpr(implicit store: Store): Parser[Expr] = 
     (p('(') ~> expression <~ p(')')) |
     (p('{') ~> expression <~ p('}'))
@@ -50,7 +106,7 @@ class InoxParser(val program: InoxProgram) extends StdTokenParsers {
     case RawIdentifier(i) => (i, i.uniqueName)
   })
 
-  lazy val inoxType: Parser[Type] = rep1sep(argumentTypes | uniqueType, elem(Keyword("=>"))) ^^ {
+  lazy val inoxType: Parser[Type] = rep1sep(argumentTypes | uniqueType, kw("=>")) ^^ {
     case tss => tss.reverse match {
       case returnTypes :: rest => {
         val retType = returnTypes match {
@@ -225,7 +281,7 @@ class InoxParser(val program: InoxProgram) extends StdTokenParsers {
     }
 
     // TODO: Add stuff here.
-    val zero = greedyRight | invocationExpr | constructorExpr | literalExpr | variableExpr | parensExpr
+    val zero = nonOperatorExpr
 
     opTable.foldLeft(zero) {
       case (lessPrio, ops) => {
