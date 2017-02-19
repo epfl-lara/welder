@@ -287,7 +287,7 @@ class InoxParser(val program: InoxProgram) extends StdTokenParsers {
     opTable.foldLeft(zero) {
       case (lessPrio, ops) => {
         val oneOp = ops.map({
-          case (op, f) => elem(lexical.Operator(op)) ^^^ f
+          case (op, (f, _)) => elem(lexical.Operator(op)) ^^^ f
         }).reduce(_ | _)
 
         withPrio(oneOp, lessPrio)

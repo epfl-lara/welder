@@ -15,26 +15,30 @@ class InoxLexer(val program: InoxProgram) extends StdLexical with StringContextL
 
   import program.trees._
 
-  val opTable: Seq[Seq[(String, (Expr, Expr) => Expr)]] = Seq(
+  sealed abstract class Assoc
+  case object LeftAssoc extends Assoc
+  case object RightAssoc extends Assoc
 
-    Seq("*" -> { (a: Expr, b: Expr) => Times(a, b) },
-        "/" -> { (a: Expr, b: Expr) => Division(a, b) },
-        "%" -> { (a: Expr, b: Expr) => Remainder(a, b) }),
+  val opTable: Seq[Seq[(String, ((Expr, Expr) => Expr, Assoc))]] = Seq(
 
-    Seq("+" -> { (a: Expr, b: Expr) => Plus(a, b) }, 
-        "-" -> { (a: Expr, b: Expr) => Minus(a, b) }),
+    Seq("*" -> ({ (a: Expr, b: Expr) => Times(a, b) }, LeftAssoc),
+        "/" -> ({ (a: Expr, b: Expr) => Division(a, b) }, LeftAssoc),
+        "%" -> ({ (a: Expr, b: Expr) => Remainder(a, b) }, LeftAssoc)),
+
+    Seq("+" -> ({ (a: Expr, b: Expr) => Plus(a, b) }, LeftAssoc), 
+        "-" -> ({ (a: Expr, b: Expr) => Minus(a, b) }, LeftAssoc)),
     
-    Seq(">=" -> { (a: Expr, b: Expr) => GreaterEquals(a, b) },
-        "<=" -> { (a: Expr, b: Expr) => LessEquals(a, b) },
-        ">" -> { (a: Expr, b: Expr) => GreaterThan(a, b) },
-        "<" -> { (a: Expr, b: Expr) => LessThan(a, b) }),
+    Seq(">=" -> ({ (a: Expr, b: Expr) => GreaterEquals(a, b) }, LeftAssoc),
+        "<=" -> ({ (a: Expr, b: Expr) => LessEquals(a, b) }, LeftAssoc),
+        ">" -> ({ (a: Expr, b: Expr) => GreaterThan(a, b) }, LeftAssoc),
+        "<" -> ({ (a: Expr, b: Expr) => LessThan(a, b) }, LeftAssoc)),
 
-    Seq("==" -> { (a: Expr, b: Expr) => Equals(a, b) },
-        "!=" -> { (a: Expr, b: Expr) => Not(Equals(a, b)) }),
+    Seq("==" -> ({ (a: Expr, b: Expr) => Equals(a, b) }, LeftAssoc),
+        "!=" -> ({ (a: Expr, b: Expr) => Not(Equals(a, b)) }, LeftAssoc)),
 
-    Seq("&&" -> { (a: Expr, b: Expr) => And(a, b) }),
+    Seq("&&" -> ({ (a: Expr, b: Expr) => And(a, b) }, LeftAssoc)),
 
-    Seq("||" -> { (a: Expr, b: Expr) => Or(a, b) })
+    Seq("||" -> ({ (a: Expr, b: Expr) => Or(a, b) }, LeftAssoc))
   )
   val operators = opTable.flatten.map(_._1)
 
