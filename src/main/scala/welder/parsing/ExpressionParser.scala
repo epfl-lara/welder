@@ -9,7 +9,7 @@ import inox.InoxProgram
 
 import welder.parsing._
 
-class ExprIRParser(program: InoxProgram) extends TypeIRParser(program) {
+class ExpressionParser(program: InoxProgram) extends TypeParser(program) {
 
   import lexical.{Identifier => _, Quantifier => _, _}
 

@@ -7,7 +7,7 @@ import scala.util.parsing.combinator.token._
 
 import inox.InoxProgram
 
-class TypeIRParser(val program: InoxProgram) extends StdTokenParsers {
+class TypeParser(val program: InoxProgram) extends StdTokenParsers {
 
   type Tokens = InoxLexer
 

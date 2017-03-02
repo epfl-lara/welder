@@ -13,7 +13,7 @@ trait Interpolations { self: Theory =>
   
   import program.trees._
 
-  private object ExpressionParser extends ExprIRParser(program) {
+  private object ExpressionParser extends ExpressionParser(program) {
 
     import lexical._
 
@@ -26,7 +26,7 @@ trait Interpolations { self: Theory =>
     }
   }
 
-  object TypeParser extends TypeIRParser(program) {
+  object TypeParser extends TypeParser(program) {
 
     import lexical._
 
