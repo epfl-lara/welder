@@ -11,36 +11,27 @@ import inox.InoxProgram
 
 class InoxLexer(val program: InoxProgram) extends StdLexical with StringContextLexer {
 
-  reserved ++= Seq("true", "false")
+  reserved ++= Seq("true", "false", "if", "else")
 
   import program.trees._
 
-  sealed abstract class Assoc
-  case object LeftAssoc extends Assoc
-  case object RightAssoc extends Assoc
+  val opTable: Seq[(Seq[String], Assoc)] = Seq(
 
-  val opTable: Seq[Seq[(String, ((Expr, Expr) => Expr, Assoc))]] = Seq(
+    Seq("*", "/", "%") -> LeftAssoc,
 
-    Seq("*" -> ({ (a: Expr, b: Expr) => Times(a, b) }, LeftAssoc),
-        "/" -> ({ (a: Expr, b: Expr) => Division(a, b) }, LeftAssoc),
-        "%" -> ({ (a: Expr, b: Expr) => Remainder(a, b) }, LeftAssoc)),
-
-    Seq("+" -> ({ (a: Expr, b: Expr) => Plus(a, b) }, LeftAssoc), 
-        "-" -> ({ (a: Expr, b: Expr) => Minus(a, b) }, LeftAssoc)),
+    Seq("+", "-") -> LeftAssoc,
     
-    Seq(">=" -> ({ (a: Expr, b: Expr) => GreaterEquals(a, b) }, LeftAssoc),
-        "<=" -> ({ (a: Expr, b: Expr) => LessEquals(a, b) }, LeftAssoc),
-        ">" -> ({ (a: Expr, b: Expr) => GreaterThan(a, b) }, LeftAssoc),
-        "<" -> ({ (a: Expr, b: Expr) => LessThan(a, b) }, LeftAssoc)),
+    Seq(">=", "<=", ">", "<") -> LeftAssoc,
 
-    Seq("==" -> ({ (a: Expr, b: Expr) => Equals(a, b) }, LeftAssoc),
-        "!=" -> ({ (a: Expr, b: Expr) => Not(Equals(a, b)) }, LeftAssoc)),
+    Seq("==", "!=") -> LeftAssoc,
 
-    Seq("&&" -> ({ (a: Expr, b: Expr) => And(a, b) }, LeftAssoc)),
+    Seq("&&", "&") -> LeftAssoc,
 
-    Seq("||" -> ({ (a: Expr, b: Expr) => Or(a, b) }, LeftAssoc))
+    Seq("||", "|") -> LeftAssoc,
+
+    Seq("==>") -> RightAssoc
   )
-  val operators = opTable.flatten.map(_._1)
+  val operators = opTable.map(_._1).flatten
 
   case class Parenthesis(parenthesis: Char) extends Token { def chars = parenthesis.toString }
   case class Punctuation(punctuation: Char) extends Token { def chars = punctuation.toString }
@@ -55,7 +46,9 @@ class InoxLexer(val program: InoxProgram) extends StdLexical with StringContextL
   val keywords = acceptSeq("=>") ^^^ Keyword("=>") |
                  ('.' <~ not(whitespaceChar)) ^^^ Keyword(".") |
                  acceptSeq("true") ^^^ Keyword("true") |
-                 acceptSeq("false") ^^^ Keyword("false")
+                 acceptSeq("false") ^^^ Keyword("false") |
+                 acceptSeq("if") ^^^ Keyword("if") |
+                 acceptSeq("else") ^^^ Keyword("else")
 
   val comma: Parser[Token] = ',' ^^^ Punctuation(',')
   val dot: Parser[Token] = '.' ^^^ Punctuation('.')
@@ -66,7 +59,7 @@ class InoxLexer(val program: InoxProgram) extends StdLexical with StringContextL
                                   'λ' ^^^ Quantifier("lambda")
 
   val operator: Parser[Token] =
-    operators.map(acceptSeq(_)).reduce(_ | _) ^^ { (xs: List[Char]) =>
+    operators.sortBy(-_.length).map(acceptSeq(_)).reduce(_ | _) ^^ { (xs: List[Char]) =>
       Operator(xs.mkString)
     }
 
@@ -75,10 +68,11 @@ class InoxLexer(val program: InoxProgram) extends StdLexical with StringContextL
     })
 
   override def argToToken(x: Any): Token = x match {
-    case s: Symbol => Identifier(s.toString)
-    case i: BigInt => NumericLit(i.toString)
-    case i: Int    => NumericLit(i.toString)
-    case s: String => StringLit(s)
+    case s: Symbol  => Identifier(s.toString)
+    case i: BigInt  => NumericLit(i.toString)
+    case i: Int     => NumericLit(i.toString)
+    case b: Boolean => RawExpr(BooleanLiteral(b))
+    case s: String  => StringLit(s)
     case i: inox.Identifier => RawIdentifier(i)
     case e: Expr => RawExpr(e)
     case t: Type => RawType(t)
