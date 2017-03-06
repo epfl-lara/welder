@@ -45,22 +45,25 @@ trait Solvers { self: Theory =>
     else {
       val hypotheses = assumptions.map(_.expression)
       val negation = Not(Implies(and(hypotheses : _*), expr))
-
       program.ctx.reporter.debug(negation)
-
       val solver = factory.getNewSolver.setTimeout(5000L)
-      solver.assertCnstr(negation)
-      val result = solver.check(SolverResponses.Model) // TODO: What to do with models?
+      try {
+        solver.assertCnstr(negation)
+        val result = solver.check(SolverResponses.Model) // TODO: What to do with models?
 
-      program.ctx.reporter.debug(result)
+        program.ctx.reporter.debug(result)
 
-      if (result.isUNSAT) {
-        // Impossible to satisfy the negation of the expression,
-        // thus the expression follows from the assumptions.
-        Attempt.success(new Theorem(expr).from(assumptions))
+        if (result.isUNSAT) {
+          // Impossible to satisfy the negation of the expression,
+          // thus the expression follows from the assumptions.
+          Attempt.success(new Theorem(expr).from(assumptions))
+        }
+        else {
+          Attempt.fail("SMT solver could not prove the property: " + expr + ", from hypotheses: " + hypotheses.mkString(", ") + ".")
+        }
       }
-      else {
-        Attempt.fail("SMT solver could not prove the property: " + expr + ", from hypotheses: " + hypotheses.mkString(", ") + ".")
+      finally {
+        factory.reclaim(solver)
       }
     }
   }

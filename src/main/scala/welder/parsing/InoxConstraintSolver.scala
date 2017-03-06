@@ -267,41 +267,46 @@ trait InoxConstraintSolver { self : Constraints =>
     val program = InoxProgram(Context.empty, progSymbols)
     val solver = program.getSolver.getNewSolver
 
-    for (constraint <- constraints) {
-      solver.assertCnstr(constraintToExpr(constraint))
-    }
+    try {
+      for (constraint <- constraints) {
+        solver.assertCnstr(constraintToExpr(constraint))
+      }
 
-    solver.check(SolverResponses.Model) match {
-      case SolverResponses.SatWithModel(model) => {
-        val unknownTable = variables.map(_.swap)
-        val tcTable = constructors.map { case (tc, adtcons) => (adtcons.id -> tc) }
-        val adtTable = names.map { case (i, adtcons) => (adtcons.id -> i) }
+      solver.check(SolverResponses.Model) match {
+        case SolverResponses.SatWithModel(model) => {
+          val unknownTable = variables.map(_.swap)
+          val tcTable = constructors.map { case (tc, adtcons) => (adtcons.id -> tc) }
+          val adtTable = names.map { case (i, adtcons) => (adtcons.id -> i) }
 
-        def exprToADT(expr: Expr): Identifier = expr match {
-          case ADT(tpe, Seq()) => adtTable(tpe.id)
-        }
+          def exprToADT(expr: Expr): Identifier = expr match {
+            case ADT(tpe, Seq()) => adtTable(tpe.id)
+          }
 
-        def exprToType(expr: Expr): trees.Type = expr match {
-          case Variable(_, _, _) => throw new Error("Uninstantiated meta variable in the model.")
-          case ADT(tpe, args) => {
+          def exprToType(expr: Expr): trees.Type = expr match {
+            case Variable(_, _, _) => throw new Error("Uninstantiated meta variable in the model.")
+            case ADT(tpe, args) => {
 
-            (args, tcTable(tpe.id)) match {
-              case (Seq(t), Set_)     => trees.SetType(exprToType(t))
-              case (Seq(f, t), Map_)  => trees.MapType(exprToType(f), exprToType(t))
-              case (Seq(t), Bag)      => trees.BagType(exprToType(t))
-              case (ts, Fun(_))       => trees.FunctionType(ts.tail.map(exprToType(_)), exprToType(ts.head))
-              case (_, Tup(_))        => trees.TupleType(args.map(exprToType(_)))
-              case (_, ADT_(_))       => trees.ADTType(exprToADT(args.head), args.tail.map(exprToType(_)))
-              case (Seq(), Prim(tpe)) => tpe
+              (args, tcTable(tpe.id)) match {
+                case (Seq(t), Set_)     => trees.SetType(exprToType(t))
+                case (Seq(f, t), Map_)  => trees.MapType(exprToType(f), exprToType(t))
+                case (Seq(t), Bag)      => trees.BagType(exprToType(t))
+                case (ts, Fun(_))       => trees.FunctionType(ts.tail.map(exprToType(_)), exprToType(ts.head))
+                case (_, Tup(_))        => trees.TupleType(args.map(exprToType(_)))
+                case (_, ADT_(_))       => trees.ADTType(exprToADT(args.head), args.tail.map(exprToType(_)))
+                case (Seq(), Prim(tpe)) => tpe
+              }
             }
           }
-        }
 
-        Some(new Unifier(model.vars.map { case (vd, expr) =>
-          unknownTable(vd.toVariable) -> exprToType(expr)
-        }))
+          Some(new Unifier(model.vars.map { case (vd, expr) =>
+            unknownTable(vd.toVariable) -> exprToType(expr)
+          }))
+        }
+        case _ => None
       }
-      case _ => None
+    }
+    finally {
+      solver.free()
     }
   }
 }
