@@ -292,7 +292,7 @@ trait Rules { self: Theory =>
       val substitutions = defs.zip(terms).toMap
 
       val typeError = substitutions.exists { case (vd, e) =>
-        vd.getType != e.getType || e.getType == Untyped
+        !symbols.isSubtypeOf(e.getType, vd.getType)
       }
 
       if (typeError) {
