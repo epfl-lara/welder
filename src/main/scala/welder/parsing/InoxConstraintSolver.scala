@@ -260,8 +260,12 @@ trait InoxConstraintSolver { self : Constraints =>
     val allConstructors = constructors.values.toSeq
     val typeSort = mkSort(typeId)()(allConstructors.map(_.id))
 
+    val adts =
+      if (allNames.isEmpty) typeSort +: allConstructors
+      else Seq(nameSort, typeSort) ++ allConstructors ++ allNames
+
     val progSymbols = NoSymbols
-                    .withADTs(Seq(nameSort, typeSort) ++ allConstructors ++ allNames)
+                    .withADTs(adts)
                     .withFunctions(Seq(isSubtypeFd, isNumericFd, isIntegralFd, isBitVectorFd))
 
     val program = InoxProgram(Context.empty, progSymbols)
