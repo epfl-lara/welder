@@ -307,6 +307,58 @@ trait Rules { self: Theory =>
     case _ => Attempt.fail("Could not apply rule forallE on expression " + quantified.expression + ".") 
   }
 
+  def existsI(expr: Expr, name: String)(theorem: Theorem): Attempt[Theorem] = {
+    existsI(root ~~ is(expr), name)(theorem)
+  }
+
+  def existsI(path: Path, name: String)(theorem: Theorem): Attempt[Theorem] = {
+    val focuses = path.on(theorem.expression)
+
+    if (focuses.isEmpty) {
+      // No expression satisfying path.
+      return Attempt.fail("No expression satisfying the provided path.")
+    }
+    if (!focuses.tail.isEmpty) {
+      // Ambiguity here.
+      return Attempt.fail("Path is ambiguous.")
+    }
+
+    val focus = focuses.head
+    val original = focus.get
+
+    val tpe = original.getType
+    val valDef = ValDef(FreshIdentifier(name), tpe)
+
+    val replaced = focus.set(valDef.toVariable)
+
+    Attempt.success {
+      new Theorem(replaced match {
+        case Not(Forall(vds, body)) => Not(Forall(valDef +: vds, body))
+        case _ => Not(Forall(Seq(valDef), Not(replaced)))
+      }).from(theorem)
+    }
+  }
+
+  def existsE(quantified: Theorem): Attempt[(Variable, Theorem)] = quantified.expression match {
+    case Not(Forall(Seq(vd), Not(body))) => {
+      val variable = vd.freshen.toVariable
+      val substitutions = Map(vd -> variable)
+      Attempt.success((variable), new Theorem(exprOps.replaceFromSymbols(substitutions, body)).from(quantified))
+    }
+    case Not(Forall(Seq(vd), body)) => {
+      val variable = vd.freshen.toVariable
+      val substitutions = Map(vd -> variable)
+      Attempt.success((variable), new Theorem(Not(exprOps.replaceFromSymbols(substitutions, body))).from(quantified))
+    }
+    case Not(Forall(vds, body)) => {
+      val vd = vds.head
+      val variable = vd.freshen.toVariable
+      val substitutions = Map(vd -> variable)
+      Attempt.success((variable), new Theorem(Not(Forall(vds.tail, exprOps.replaceFromSymbols(substitutions, body)))).from(quantified))
+    }
+    case _ => Attempt.fail("Could not apply rule existsE.")
+  }
+
   /** Reflexivity of equality.
    *
    * Contains the `Theorem`: `∀x. x = x`.

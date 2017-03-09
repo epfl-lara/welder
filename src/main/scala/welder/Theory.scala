@@ -106,6 +106,27 @@ trait Theory
     def forallE(first: Expr, rest: Expr*): Attempt[Theorem] =
       self.forallE(this, first +: rest)
 
+    /** Existantial quantification introduction. */
+    def existsI(path: Path, name: String): Attempt[Theorem] =
+      self.existsI(path, name)(this)
+
+    /** Existantial quantification introduction. */
+    def existsI(expr: Expr, name: String): Attempt[Theorem] =
+      self.existsI(expr, name)(this)
+
+    /** Existantial quantification elimination. */
+    def existsE: Attempt[(Variable, Theorem)] =
+      self.existsE(this)
+
+    /** Existantial quantification elimination on n variables. */
+    def existsE(n: Int): Attempt[(Seq[Variable], Theorem)] =
+      if (n < 0) Attempt.fail("Illegal argument to method existsE. The parameter n is negative.")
+      else if (n == 0) Attempt.success((Seq(), this))
+      else for {
+        vt <- self.existsE(this)
+        vst <- vt._2.existsE(n - 1)
+      } yield (vt._1 +: vst._1, vst._2)
+
     /** Disjunction elimination. */
     def orE(conclusion: Expr)(cases: (Theorem, Goal) => Attempt[Witness]): Attempt[Theorem] = 
       self.orE(this, conclusion)(cases)
