@@ -24,6 +24,10 @@ trait Interpolations { self: Theory =>
     def parseIR(sc: StringContext, args: Seq[Any]): ParseResult[Any] = {
       phrase(expression)(getReader(sc, args))
     }
+
+    def parseValDef(sc: StringContext, args: Seq[Any]): ParseResult[ValDef] = {
+      phrase(inoxValDef)(getReader(sc, args))
+    }
   }
 
   object TypeParser extends TypeParser(program) {
@@ -67,9 +71,9 @@ trait Interpolations { self: Theory =>
     //   })
     // }
 
-    // def v(args: Any*): ValDef = {
-    //   fromParseResult(ExpressionParser.parseValDef(sc, args))
-    // }
+    def v(args: Any*): ValDef = {
+      fromParseResult(ExpressionParser.parseValDef(sc, args))
+    }
 
     // TODO: Remove. Just useful for internal debug.
     def r(args: Any*): List[Any] = {

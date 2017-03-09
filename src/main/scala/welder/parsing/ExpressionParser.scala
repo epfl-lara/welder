@@ -5,7 +5,7 @@ import scala.util.parsing.combinator._
 import scala.util.parsing.combinator.syntactical._
 import scala.util.parsing.combinator.token._
 
-import inox.InoxProgram
+import inox.{InoxProgram, FreshIdentifier}
 
 import welder.parsing._
 
@@ -184,4 +184,13 @@ class ExpressionParser(program: InoxProgram) extends TypeParser(program) {
 
   lazy val inoxExpr: Parser[trees.Expr] = expression ^? irToInoxExpr
   lazy val irToInoxExpr: PartialFunction[Expression, trees.Expr] = Utils.toPartial(toInoxExpr(_))
+
+  lazy val inoxValDef: Parser[trees.ValDef] = for {
+    i <- identifier
+    _ <- p(':')
+    t <- inoxType
+  } yield i match {
+    case IdentifierIdentifier(v) => trees.ValDef(v, t)
+    case IdentifierName(n) => trees.ValDef(FreshIdentifier(n), t)
+  }
 }
