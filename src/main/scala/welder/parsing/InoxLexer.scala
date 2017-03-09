@@ -56,7 +56,9 @@ class InoxLexer(val program: InoxProgram) extends StdLexical with StringContextL
   val punctuation: Parser[Token] = comma | dot | colon
 
   val quantifier: Parser[Token] = '∀' ^^^ Quantifier("forall") |
+                                  '∃' ^^^ Quantifier("exists") |
                                   'λ' ^^^ Quantifier("lambda")
+
 
   val operator: Parser[Token] =
     operators.sortBy(-_.length).map(acceptSeq(_)).reduce(_ | _) ^^ { (xs: List[Char]) =>

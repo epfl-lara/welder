@@ -40,6 +40,7 @@ trait ExprIR extends IR with Constraints with InoxConstraintSolver {
   sealed abstract class Quantifier
   case object Lambda extends Quantifier
   case object Forall extends Quantifier
+  case object Exists extends Quantifier
 
   object Field {
 
@@ -576,6 +577,31 @@ trait ExprIR extends IR with Constraints with InoxConstraintSolver {
         val vds = bs.map({ case (i, t) => trees.ValDef(i, unifier(t)) })
 
         (bodyExpr: trees.Expr) => trees.Forall(vds, bodyExpr)
+      }).app({
+        typeCheck(body, expected)(store ++ bindings.map(_._1.getName).zip(bs))
+      }).addConstraints({
+        // Type of variable should correspond to those annotated.
+        bindings.zip(bs).flatMap({
+          case ((_, oType), (_, tpe)) => oType.map(Constraint.equal(_, tpe))
+        })
+      }).addConstraint({
+        // The expected type should be boolean.
+        Constraint.equal(expected, trees.BooleanType)
+      })
+    }
+
+    // Exists-Quantification.
+    case Abstraction(Exists, bindings, body) => {
+
+      val bs = bindings.map({
+        case (IdentifierName(name), _) => (inox.FreshIdentifier(name), Unknown.fresh)
+        case (IdentifierIdentifier(i), _) => (i, Unknown.fresh)
+      })
+
+      Constrained.withUnifier({ (unifier: Unifier) => 
+        val vds = bs.map({ case (i, t) => trees.ValDef(i, unifier(t)) })
+
+        (bodyExpr: trees.Expr) => trees.Not(trees.Forall(vds, trees.not(bodyExpr)))
       }).app({
         typeCheck(body, expected)(store ++ bindings.map(_._1.getName).zip(bs))
       }).addConstraints({

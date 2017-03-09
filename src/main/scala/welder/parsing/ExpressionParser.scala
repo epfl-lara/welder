@@ -124,6 +124,7 @@ class ExpressionParser(program: InoxProgram) extends TypeParser(program) {
 
   lazy val quantifier: Parser[Quantifier] = acceptMatch("Quantifier expected.", {
     case lexical.Quantifier("forall") => Forall
+    case lexical.Quantifier("exists") => Exists
     case lexical.Quantifier("lambda") => Lambda
   })
 
