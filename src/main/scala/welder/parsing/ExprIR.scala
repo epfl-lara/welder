@@ -371,6 +371,22 @@ trait ExprIR extends IR with Constraints with InoxConstraintSolver {
       })
     }
 
+    // Inequality.
+    case Operation("!=", args) => {
+      
+      val expectedArg = Unknown.fresh
+
+      Constrained.sequence({
+        args.map(typeCheck(_, expectedArg))
+      }).map({
+        case Seq(a, b) => trees.Not(trees.Equals(a, b))
+      }).checkImmediate({
+        args.length == 2
+      }).addConstraint({
+        Constraint.equal(expected, trees.BooleanType)
+      })
+    }
+
     // Binary operation defined on comparable types.
     case Operation(BooleanBinOp(op), args) => {
       
