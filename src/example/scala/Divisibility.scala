@@ -123,14 +123,16 @@ object DivisibilityExample {
 
 
   // Theorem stating that, for any non-zero x and arbitrary y,
-  // if x divides y, then the remainder of the division by x of y is zero. 
+  // x divides y if and only if the remainder of the division by x of y is zero. 
   lazy val dividesRemainder = 
     forallI(v"x: BigInt", v"y: BigInt") { (x: Variable, y: Variable) => 
       implI(e"$x != 0") { (xNonZero: Theorem) => 
-        implI(divides(x, y)) { (xDividesY: Theorem) =>
+
+        // First direction. We assume that x divides y.
+        val dir1 = implI(divides(x, y)) { (xDividesY: Theorem) =>
           val (k, xTimesKisY) = xDividesY.existsE.get
 
-          // We apply the above lemma about whole division to x and k.
+          // We apply the lemma about whole division to x and k.
           val lemmaWholeDiv = wholeDivision
             .forallE(e"$x")
             .implE(_.by(xNonZero))
@@ -149,6 +151,26 @@ object DivisibilityExample {
                                         trivial |
           e"0"
         }
+
+        // Second direction. We assume that y % x = 0.
+        val dir2 = implI(e"$y % $x == 0") { (remainderZero: Theorem) =>
+          val lemma =
+            e"$y - ($y / $x) * $x"              ==|
+              andI(xNonZero, remainderDefinition) |
+            e"$y % $x"                          ==|
+                    andI(xNonZero, remainderZero) |
+            e"0"
+
+          prove(e"$x * ($y / $x) == $y", andI(lemma, xNonZero))
+            .existsI(e"$y / $x", "k")
+        }
+
+        // Combine the two directions to show the equivalence between the two statements.
+        iffI(divides(x, y), e"$y % $x == 0", {
+          case (thm, goal) => goal.by(dir1.implE(_.by(thm)))
+        }, {
+          case (thm, goal) => goal.by(dir2.implE(_.by(thm)))
+        })
       }
     }
 }
