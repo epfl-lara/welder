@@ -126,8 +126,8 @@ object DivisibilityExample {
   // if x divides y, then the remainder of the division by x of y is zero. 
   lazy val dividesRemainder = 
     forallI(v"x: BigInt", v"y: BigInt") { (x: Variable, y: Variable) => 
-      implI(divides(x, y)) { (xDividesY: Theorem) =>
-        implI(e"$x != 0") { (xNonZero: Theorem) => 
+      implI(e"$x != 0") { (xNonZero: Theorem) => 
+        implI(divides(x, y)) { (xDividesY: Theorem) =>
           val (k, xTimesKisY) = xDividesY.existsE.get
 
           // We apply the above lemma about whole division to x and k.
