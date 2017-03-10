@@ -296,6 +296,13 @@ trait ExprIR extends IR with Constraints with InoxConstraintSolver {
       })
     }
 
+    // Unary plus.
+    case Operation("+", Seq(arg)) => {
+      typeCheck(arg, expected).addConstraint({
+        Constraint.isNumeric(expected)
+      })
+    }
+
     // Binary operation defined on numeric types.
     case Operation(NumericBinOp(op), args) => {
 
@@ -321,6 +328,13 @@ trait ExprIR extends IR with Constraints with InoxConstraintSolver {
         args.length == 2
       }).addConstraint({
         Constraint.isIntegral(expected)
+      })
+    }
+
+    // Unary negation.
+    case Operation("!", Seq(arg)) => {
+      typeCheck(arg, expected).map(trees.Not(_)).addConstraint({
+        Constraint.equal(expected, trees.BooleanType)
       })
     }
 

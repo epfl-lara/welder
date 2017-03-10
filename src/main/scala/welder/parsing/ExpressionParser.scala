@@ -23,9 +23,9 @@ class ExpressionParser(program: InoxProgram) extends TypeParser(program) {
   lazy val expression: Parser[Expression] = (greedyRight | operatorExpr) withFailureMessage "Expression expected."
   lazy val nonOperatorExpr: Parser[Expression] = greedyRight | selectionExpr
 
-  lazy val selectableExpr: Parser[Expression] = withApplication {
+  lazy val selectableExpr: Parser[Expression] = withPrefix { withApplication {
     invocationExpr | literalExpr | variableExpr | parensExpr
-  } withFailureMessage "Expression expected."
+  } } withFailureMessage "Expression expected."
 
   def withApplication(exprParser: Parser[Expression]): Parser[Expression] =
     for {
@@ -34,6 +34,20 @@ class ExpressionParser(program: InoxProgram) extends TypeParser(program) {
     } yield {
       argss.foldLeft(expr) {
         case (acc, args) => Application(acc, args)
+      }
+    }
+
+  lazy val prefix: Parser[Expression => Expression] = unaryOps.map({
+    (op: String) => elem(Operator(op)) ^^^ { (x: Expression) => Operation(op, Seq(x)) }
+  }).reduce(_ | _)
+
+  def withPrefix(exprParser: Parser[Expression]): Parser[Expression] =
+    for {
+      pres <- rep(prefix)
+      expr <- exprParser
+    } yield {
+      pres.foldRight(expr) {
+        case (pre, acc) => pre(acc)
       }
     }
 

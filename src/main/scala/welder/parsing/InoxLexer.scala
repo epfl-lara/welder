@@ -15,6 +15,7 @@ class InoxLexer(val program: InoxProgram) extends StdLexical with StringContextL
 
   import program.trees._
 
+  val unaryOps: Seq[String] = Seq("-", "+", "!")
   val opTable: Seq[(Seq[String], Assoc)] = Seq(
 
     Seq("*", "/", "%", "mod") -> LeftAssoc,
@@ -31,7 +32,7 @@ class InoxLexer(val program: InoxProgram) extends StdLexical with StringContextL
 
     Seq("==>") -> RightAssoc
   )
-  val operators = opTable.map(_._1).flatten
+  val operators = (opTable.map(_._1).flatten ++ unaryOps).distinct
 
   case class Parenthesis(parenthesis: Char) extends Token { def chars = parenthesis.toString }
   case class Punctuation(punctuation: Char) extends Token { def chars = punctuation.toString }
