@@ -25,8 +25,130 @@ object DivisibilityExample {
       }
     }
 
+  // The quotient-remainder theorem, stating that, for any a and b, there exists q and r such that a = q * b + r.
+  lazy val quotientRemainder = forallI(v"a: BigInt", v"b: BigInt") { (a: Variable, b: Variable) =>
+    implI(e"$b != 0") { (bNonZero: Theorem) =>
+      val q = e"$a / $b"
+      val r = e"$a % $b"
+      prove(e"$a == $q * $b + $r", bNonZero)
+        .existsI(e"$q", "q")
+        .existsI(e"$r", "r")
+    }
+  }
+
+  // Theorem relating the integer division and remainder operations.
+  lazy val remainderDefinition = forallI(v"n: BigInt", v"m: BigInt") { (n: Variable, m: Variable) =>
+    implI(e"$m != 0") { (mPositive: Theorem) =>
+      prove(e"$n % $m == $n - ($n / $m) * $m", mPositive)
+    }
+  }
+
+  // Theorem stating that, for any x != 0 and n, (x * n) / x == n.
+  lazy val wholeDivision = forallI(v"x: BigInt") { (x: Variable) =>
+    implI(e"$x != 0") { (xNonZero: Theorem) =>
+
+      // We first state the theorem for all n >= 0.
+      val nPos = {
+        def property(k: Expr) = e"($x * $k) / $x == $k"
+
+        // We prove this by induction.
+        naturalInduction(property(_), e"0", _.by(xNonZero)) { case (ihs, goal) =>
+
+          val n = ihs.variable
+
+          // We apply the axiom about division on x * n and x.
+          val oneStep = divisionDecomposition
+            .forallE(e"$x * $n", e"$x")
+            .implE(_.by(xNonZero))
+
+          // The inductive case is derived from:
+          e"($x * ($n + 1)) / $x"            ==|
+                                      xNonZero |
+          e"($x * $n + $x) / $x"             ==|
+                       andI(xNonZero, oneStep) |
+          e"($x * $n) / $x + 1"              ==|
+            andI(xNonZero, ihs.propertyForVar) |
+          e"$n + 1"
+        }
+      }
+
+      // We then state the theorem for negative n's.
+      val nNeg = {
+        forallI(v"n: BigInt") { (n: Variable) =>
+          implI(e"$n < 0") { (nNeg: Theorem) =>
+
+            // We apply the theorem for -n, since -n is positive.
+            val lemma = nPos.forallE(e"-$n").implE(_.by(nNeg))
+
+            // The following derivation shows 
+            // that the property holds also for negative n's:
+            e"($x * $n) / $x"     ==|
+                           xNonZero |
+            e"-($x * -$n) / $x"   ==|
+                           xNonZero |
+            e"-(($x * -$n) / $x)" ==|      
+              andI(xNonZero, lemma) |
+            e"-(-$n)"             ==|
+                            trivial |
+            e"$n"
+
+          }
+        }
+      }
+
+      // Then, we can finally state the theorem for an arbitrary n.
+      forallI(v"n: BigInt") { (n: Variable) =>
+
+        // We have that n is either negative or positive.
+        val nEitherPosOrNeg = prove(e"$n < 0 || $n >= 0")
+
+        // Prove the property on n by case analysis on the above disjunction.
+        nEitherPosOrNeg.orE(e"($x * $n) / $x == $n") {
+
+          // In the case when we know that n is negative...
+          case (thm, goal) if thm.expression == e"$n < 0" =>
+
+            // We apply the nNeg lemma.
+            goal.by(andI(nNeg.forallE(e"$n").implE(_.by(thm)), xNonZero))
+
+          // In the case when we know that n is positive...
+          case (thm, goal) if thm.expression == e"$n >= 0" =>
+
+            // We apply the nPos lemma.
+            goal.by(andI(nPos.forallE(e"$n").implE(_.by(thm)), xNonZero))
+        }
+      }
+    }
+  }
+
+
+  // Theorem stating that, for any non-zero x and arbitrary y,
+  // if x divides y, then the remainder of the division by x of y is zero. 
   lazy val dividesRemainder = 
     forallI(v"x: BigInt", v"y: BigInt") { (x: Variable, y: Variable) => 
-      prove(e"${ divides(x, y) } == (y % x == 0)")
+      implI(divides(x, y)) { (xDividesY: Theorem) =>
+        implI(e"$x != 0") { (xNonZero: Theorem) => 
+          val (k, xTimesKisY) = xDividesY.existsE.get
+
+          // We apply the above lemma about whole division to x and k.
+          val lemmaWholeDiv = wholeDivision
+            .forallE(e"$x")
+            .implE(_.by(xNonZero))
+            .forallE(e"$k")
+
+          // We derive that y % x == 0.
+          e"$y % $x"                          ==|
+            andI(xNonZero, remainderDefinition) |
+          e"$y - ($y / $x) * $x"              ==|
+                     andI(xNonZero, xTimesKisY) |
+          e"$y - (($x * $k) / $x) * $x"       ==|
+                  andI(xNonZero, lemmaWholeDiv) |
+          e"$y - $k * $x"                     ==|
+                                     xTimesKisY |
+          e"$y - $y"                          ==|
+                                        trivial |
+          e"0"
+        }
+      }
     }
 }
