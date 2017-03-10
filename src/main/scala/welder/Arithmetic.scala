@@ -83,6 +83,15 @@ trait Arithmetic { self: Theory =>
     }
   }
 
+  lazy val divisionDecomposition: Theorem = {
+    val n = Variable.fresh("n", IntegerType)
+    val d = Variable.fresh("d", IntegerType)
+
+    new Theorem(Forall(Seq(n.toVal, d.toVal), Implies(Not(Equals(d, IntegerLiteral(0))), 
+      Equals(Division(Plus(n, d), d), Plus(Division(n, d), IntegerLiteral(1)))
+    )))
+  }
+
   /** Records induction hypotheses for natural induction. */ 
   trait NaturalInductionHypotheses {
 
