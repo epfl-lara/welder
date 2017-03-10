@@ -177,10 +177,7 @@ trait Arithmetic { self: Theory =>
       val x = Variable.fresh("n", IntegerType)
       new Theorem(Forall(Seq(x.toVal), Implies(GreaterEquals(x, base), p(x))))
         .from(baseTheorem)
-        .from(inductiveTheorem)
-        .unmark(m1)
-        .unmark(m2)
-        .unmark(m3)
+        .from(inductiveTheorem.unmark(m1).unmark(m2).unmark(m3))
     }
   }
 
