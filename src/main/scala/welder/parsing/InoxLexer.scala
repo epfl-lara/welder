@@ -17,7 +17,7 @@ class InoxLexer(val program: InoxProgram) extends StdLexical with StringContextL
 
   val opTable: Seq[(Seq[String], Assoc)] = Seq(
 
-    Seq("*", "/", "%") -> LeftAssoc,
+    Seq("*", "/", "%", "mod") -> LeftAssoc,
 
     Seq("+", "-") -> LeftAssoc,
     
