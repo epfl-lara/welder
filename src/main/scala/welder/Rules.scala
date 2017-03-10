@@ -412,6 +412,29 @@ trait Rules { self: Theory =>
     new Theorem(Equals(And(Implies(a, b), Implies(b, a)), Equals(a, b)))
   }
 
+  def iffI(a: Expr,
+           b: Expr, 
+           aImpliesB: (Theorem, Goal) => Attempt[Witness], 
+           bImpliesA: (Theorem, Goal) => Attempt[Witness]): Attempt[Theorem] = {
+
+    if (a.getType != BooleanType || b.getType != BooleanType) {
+      Attempt.fail("Illegal arguments to iffI.")
+    }
+    else {
+      val (thmA, markA) = new Theorem(a).mark
+      val (thmB, markB) = new Theorem(b).mark
+      val goalB = new Goal(b)
+      val goalA = new Goal(a)
+
+      val aImplB = aImpliesB(thmA, goalB).flatMap(_.extractTheorem(goalB))
+      val bImplA = bImpliesA(thmB, goalA).flatMap(_.extractTheorem(goalA))
+
+      Attempt.all(Seq(aImplB, bImplA)) map { case Seq(tab, tba) =>
+        new Theorem(Equals(a, b)).from(tab.unmark(markA)).from(tba.unmark(markB))
+      }
+    }
+  }
+
   lazy val iffE: Theorem = {
     val a = Variable.fresh("a", BooleanType)
     val b = Variable.fresh("b", BooleanType)
