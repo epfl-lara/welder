@@ -156,7 +156,7 @@ trait Rules { self: Theory =>
           val goal = new Goal(conclusion)
 
           catchFailedAttempts {
-            cases(hyp, goal) flatMap { (witness: Witness) => witness.extractTheorem(goal) }
+            cases(hyp, goal) flatMap { (witness: Witness) => witness.extractTheorem(goal).map(_.unmark(mark)) }
           }
         }
 
