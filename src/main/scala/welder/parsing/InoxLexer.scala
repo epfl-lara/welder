@@ -42,7 +42,7 @@ class InoxLexer(val program: InoxProgram) extends StdLexical with StringContextL
   case class RawExpr(expr: Expr) extends Token { def chars = expr.toString }
   case class RawType(tpe: Type) extends Token { def chars = tpe.toString }
 
-  override def token: Parser[Token] = operator | keywords | punctuation | parens | quantifier | super.token
+  override def token: Parser[Token] = number | operator | keywords | punctuation | parens | quantifier | super.token
 
   val keywords = acceptSeq("=>") ^^^ Keyword("=>") |
                  ('.' <~ not(whitespaceChar)) ^^^ Keyword(".") |
@@ -58,6 +58,11 @@ class InoxLexer(val program: InoxProgram) extends StdLexical with StringContextL
   val dot: Parser[Token] = '.' ^^^ Punctuation('.')
   val colon: Parser[Token] = ':' ^^^ Punctuation(':')
   val punctuation: Parser[Token] = comma | dot | colon
+
+  val number = rep1(digit) ~ opt('.' ~> rep(digit)) ^^ {
+    case ds ~ None     => NumericLit(ds.mkString)
+    case ds ~ Some(rs) => NumericLit(ds.mkString + "." + rs.mkString)
+  }
 
   val quantifier: Parser[Token] = '∀' ^^^ Quantifier("forall") |
                                   '∃' ^^^ Quantifier("exists") |
