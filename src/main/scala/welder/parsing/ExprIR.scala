@@ -3,6 +3,7 @@ package parsing
 
 import inox._
 
+/** IR for expressions. */
 trait ExprIR extends IR with Constraints with InoxConstraintSolver {
   
   val trees: inox.ast.Trees
@@ -41,6 +42,8 @@ trait ExprIR extends IR with Constraints with InoxConstraintSolver {
   case object Lambda extends Quantifier
   case object Forall extends Quantifier
   case object Exists extends Quantifier
+
+  //---- Extractors ----//
 
   object Field {
 
@@ -152,6 +155,7 @@ trait ExprIR extends IR with Constraints with InoxConstraintSolver {
     }
   }
 
+  /** Conversion to Inox expression. */
   def toInoxExpr(expr: Expression): Option[trees.Expr] = {
     val topType = Unknown.fresh
 
@@ -163,6 +167,13 @@ trait ExprIR extends IR with Constraints with InoxConstraintSolver {
     }
   }
 
+  /** Type inference and expression elaboration.
+   *
+   * @param expr     The expression to typecheck.
+   * @param expected The type the expression is expected to have.
+   * @param store    Mappings of variables.
+   * @return A sequence of constraints and a way to build an Inox expression given a solution to the constraints.
+   */
   def typeCheck(expr: Expression, expected: Unknown)
                (implicit store: Map[String, (inox.Identifier, trees.Type)]): Constrained[trees.Expr] = expr match {
 

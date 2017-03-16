@@ -1,6 +1,9 @@
 package welder
 package parsing
 
+/** Contains description of (type-checking) constraints and
+ *  and constrained values.
+ */
 trait Constraints {
 
   val trees: inox.ast.Trees
@@ -8,6 +11,7 @@ trait Constraints {
 
   import trees.Type
 
+  /** Represents a meta type-parameter. */
   case class Unknown(val param: BigInt) extends Type {
     override def toString: String = "MetaParam(" + param + ")"
   }
@@ -26,7 +30,7 @@ trait Constraints {
     }
   }
 
-
+  /** Maps meta type-parameters to actual types. */
   class Unifier(mappings: Map[Unknown, Type]) {
 
     val instantiator = new trees.SelfTreeTransformer {
@@ -46,6 +50,7 @@ trait Constraints {
     }
   }
 
+  /** Constraint on type(s). */
   abstract class Constraint(val types: Seq[Type])
   case class Equal(a: Type, b: Type) extends Constraint(Seq(a, b))
   case class Subtype(sub: Type, sup: Type) extends Constraint(Seq(sub, sup))
@@ -63,19 +68,29 @@ trait Constraints {
     def isBitVector(a: Type): Constraint = IsBitVector(a)
   }
 
+  /** Represents a set of constraints with a value.
+   *
+   * The value contained is not directly available,
+   * but can be obtained from a `Unifier`.
+   *
+   * Such a `Unifier` should be obtained by solving the constraints.
+   *
+   * This class offers an applicative functor interface.
+   */
   sealed abstract class Constrained[+A] {
+
     def map[B](f: A => B): Constrained[B] = this match {
       case WithConstraints(v, cs) => WithConstraints(v andThen f, cs)
       case Unsatifiable => Unsatifiable
     }
 
-    def combine[B, C](f: (A, B) => C)(that: Constrained[B]): Constrained[C] = (this, that) match {
+    def combine[B, C](that: Constrained[B])(f: (A, B) => C): Constrained[C] = (this, that) match {
       case (WithConstraints(vA, csA), WithConstraints(vB, csB)) => WithConstraints((u: Unifier) => f(vA(u), vB(u)), csA ++ csB)
       case (_, _) => Unsatifiable 
     }
 
     def app[B, C](that: Constrained[B])(implicit ev: A <:< (B => C)): Constrained[C] =
-      this.combine((f: A, x: B) => ev(f)(x))(that)
+      this.combine(that)((f: A, x: B) => ev(f)(x))
 
     def get(implicit unifier: Unifier): A = this match {
       case WithConstraints(vA, cs) => vA(unifier)
@@ -106,7 +121,7 @@ trait Constraints {
       val cons: (A, Seq[A]) => Seq[A] = (x: A, xs: Seq[A]) => x +: xs
 
       cs.foldRight(zero) {
-        case (c, acc) => c.combine(cons)(acc)
+        case (c, acc) => c.combine(acc)(cons)
       }
     }
   }

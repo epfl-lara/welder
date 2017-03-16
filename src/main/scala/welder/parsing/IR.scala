@@ -1,13 +1,15 @@
 package welder
 package parsing
 
+/** Contains abstract Intermediate Representation (IR) language. */ 
 trait IR {
-  type Identifier
-  type Type
-  type Operator
-  type Value
-  type Field
-  type Quantifier
+
+  type Identifier  // Identifier of the language.
+  type Type        // Types.
+  type Operator    // Primitive operators.
+  type Value       // Literal values.
+  type Field       // Fields.
+  type Quantifier  // Quantifiers.
 
   sealed abstract class Expression
   case class Variable(identifier: Identifier) extends Expression
