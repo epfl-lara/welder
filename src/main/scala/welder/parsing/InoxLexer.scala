@@ -11,7 +11,7 @@ import inox.InoxProgram
 
 class InoxLexer(val program: InoxProgram) extends StdLexical with StringContextLexer {
 
-  reserved ++= Seq("true", "false", "if", "else")
+  reserved ++= Seq("true", "false", "if", "else", "exists", "forall", "lambda", "let", "in")
 
   import program.trees._
 
@@ -42,14 +42,17 @@ class InoxLexer(val program: InoxProgram) extends StdLexical with StringContextL
   case class RawExpr(expr: Expr) extends Token { def chars = expr.toString }
   case class RawType(tpe: Type) extends Token { def chars = tpe.toString }
 
-  override def token: Parser[Token] = keywords | punctuation | parens | operator | quantifier | super.token
+  override def token: Parser[Token] = operator | keywords | punctuation | parens | quantifier | super.token
 
   val keywords = acceptSeq("=>") ^^^ Keyword("=>") |
                  ('.' <~ not(whitespaceChar)) ^^^ Keyword(".") |
                  acceptSeq("true") ^^^ Keyword("true") |
                  acceptSeq("false") ^^^ Keyword("false") |
                  acceptSeq("if") ^^^ Keyword("if") |
-                 acceptSeq("else") ^^^ Keyword("else")
+                 acceptSeq("else") ^^^ Keyword("else") |
+                 acceptSeq("let") ^^^ Keyword("let") |
+                 acceptSeq("in") ^^^ Keyword("in") |
+                 acceptSeq("=") ^^^ Keyword("=")
 
   val comma: Parser[Token] = ',' ^^^ Punctuation(',')
   val dot: Parser[Token] = '.' ^^^ Punctuation('.')
@@ -58,7 +61,10 @@ class InoxLexer(val program: InoxProgram) extends StdLexical with StringContextL
 
   val quantifier: Parser[Token] = '∀' ^^^ Quantifier("forall") |
                                   '∃' ^^^ Quantifier("exists") |
-                                  'λ' ^^^ Quantifier("lambda")
+                                  'λ' ^^^ Quantifier("lambda") |
+                                  acceptSeq("forall") ^^^ Quantifier("forall") |
+                                  acceptSeq("exists") ^^^ Quantifier("exists") |
+                                  acceptSeq("lambda") ^^^ Quantifier("lambda")
 
 
   val operator: Parser[Token] =
