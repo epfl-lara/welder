@@ -17,5 +17,5 @@ trait IR {
   case class Selection(structure: Expression, field: Field) extends Expression
   case class Literal(value: Value) extends Expression
   case class TypeApplication(callee: Expression, args: Seq[Type]) extends Expression
-  case class Let(bindings: Seq[(Identifier, Option[Type])], value: Expression, body: Expression) extends Expression
+  case class Let(bindings: Seq[(Identifier, Option[Type], Expression)], body: Expression) extends Expression
 }

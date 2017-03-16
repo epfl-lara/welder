@@ -558,6 +558,52 @@ trait ExprIR extends IR with Constraints with InoxConstraintSolver {
       })
     }
 
+    //---- Bindings ----//
+
+    // Let binding.
+    case Let(bs, body) if (!bs.isEmpty) => {
+
+      val (ident, otype, value) = bs.head
+      val rest = if (bs.tail.isEmpty) {
+        body
+      }
+      else {
+        Let(bs.tail, body)
+      }
+
+      val inoxIdent = ident match {
+        case IdentifierName(name) => inox.FreshIdentifier(name)
+        case IdentifierIdentifier(i) => i
+      }
+
+      val identType = Unknown.fresh
+      val valueType = Unknown.fresh
+
+      val toLet = Constrained.withUnifier { (unifier: Unifier) =>
+        (es: Seq[trees.Expr]) => trees.Let(trees.ValDef(inoxIdent, unifier(identType)), es(0), es(1))
+      }
+
+      val args = Constrained.sequence(Seq(
+        typeCheck(value, valueType),
+        typeCheck(rest, expected)(store + ((ident.getName, (inoxIdent, identType))))
+      ))
+
+      val constrained = toLet.app({
+        args
+      }).addConstraint({
+        Constraint.subtype(valueType, identType)
+      })
+
+      if (otype.isEmpty) {
+        constrained
+      }
+      else {
+        constrained.addConstraint({
+          Constraint.equal(identType, otype.get)
+        })
+      }
+    }
+
     // Lambda abstraction.
     case Abstraction(Lambda, bindings, body) => {
       val expectedBody = Unknown.fresh

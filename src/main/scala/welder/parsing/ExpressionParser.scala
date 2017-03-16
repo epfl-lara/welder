@@ -81,7 +81,7 @@ class ExpressionParser(program: InoxProgram) extends TypeParser(program) {
     case RawIdentifier(i) => FieldIdentifier(i)
   })
 
-  lazy val greedyRight: Parser[Expression] = quantifierExpr | ifExpr
+  lazy val greedyRight: Parser[Expression] = quantifierExpr | ifExpr | letExpr
 
   lazy val ifExpr: Parser[Expression] = for {
     _ <- kw("if")
@@ -90,6 +90,17 @@ class ExpressionParser(program: InoxProgram) extends TypeParser(program) {
     _ <- kw("else")
     e <- expression
   } yield Operation("IfThenElse", Seq(c, t, e))
+
+  lazy val letExpr: Parser[Expression] = for {
+    _  <- kw("let")
+    bs <- rep1sep(for {
+        v <- valDef
+        _ <- kw("=")
+        e <- expression
+      } yield (v._1, v._2, e), p(',')) 
+    _  <- kw("in")
+    bd <- expression
+  } yield Let(bs, bd)
 
   lazy val literalExpr: Parser[Expression] = acceptMatch("Literal expected.", {
     case Keyword("true")  => BooleanLiteral(true)
