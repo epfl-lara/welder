@@ -157,6 +157,7 @@ class ExpressionParser(program: InoxProgram) extends TypeParser(program) {
     case lexical.Quantifier("forall") => Forall
     case lexical.Quantifier("exists") => Exists
     case lexical.Quantifier("lambda") => Lambda
+    case lexical.Quantifier("choose") => Choose
   })
 
   lazy val valDef: Parser[(Identifier, Option[trees.Type])] = for {

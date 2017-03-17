@@ -42,6 +42,7 @@ trait ExprIR extends IR with Constraints with InoxConstraintSolver {
   case object Lambda extends Quantifier
   case object Forall extends Quantifier
   case object Exists extends Quantifier
+  case object Choose extends Quantifier
 
   //---- Extractors ----//
 
@@ -724,6 +725,32 @@ trait ExprIR extends IR with Constraints with InoxConstraintSolver {
         Constraint.equal(expected, trees.BooleanType)
       })
     }
+
+    case Abstraction(Choose, Seq((id, otype)), body) => {
+      val identType = Unknown.fresh
+      val predType = Unknown.fresh
+      val inoxIdent = id match {
+        case IdentifierIdentifier(i) => i
+        case IdentifierName(name) => inox.FreshIdentifier(name)
+      }
+      
+      val constrained = Constrained.withUnifier({ (unifier: Unifier) =>
+        (pred: trees.Expr) => trees.Choose(trees.ValDef(inoxIdent, unifier(identType)), pred)
+      }).app({
+        typeCheck(body, predType)(store + (id.getName -> (inoxIdent, identType)))
+      }).addConstraint({
+        Constraint.equal(predType, trees.BooleanType)
+      }).addConstraint({
+        Constraint.subtype(identType, expected)
+      })
+
+      otype match {
+        case Some(tpe) => constrained.addConstraint({
+          Constraint.equal(identType, tpe)
+        })
+        case _ => constrained
+      }
+    } 
 
     //---- Type Casting ----//
 

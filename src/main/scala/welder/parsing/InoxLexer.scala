@@ -11,7 +11,7 @@ import inox.InoxProgram
 
 class InoxLexer(val program: InoxProgram) extends StdLexical with StringContextLexer {
 
-  reserved ++= Seq("true", "false", "if", "else", "exists", "forall", "lambda", "let", "in")
+  reserved ++= Seq("true", "false", "if", "else", "exists", "forall", "lambda", "choose", "let", "in")
 
   import program.trees._
 
@@ -69,7 +69,8 @@ class InoxLexer(val program: InoxProgram) extends StdLexical with StringContextL
                                   'λ' ^^^ Quantifier("lambda") |
                                   acceptSeq("forall") ^^^ Quantifier("forall") |
                                   acceptSeq("exists") ^^^ Quantifier("exists") |
-                                  acceptSeq("lambda") ^^^ Quantifier("lambda")
+                                  acceptSeq("lambda") ^^^ Quantifier("lambda") |
+                                  acceptSeq("choose") ^^^ Quantifier("choose")
 
 
   val operator: Parser[Token] =
