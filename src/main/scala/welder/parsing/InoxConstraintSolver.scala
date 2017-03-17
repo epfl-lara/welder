@@ -154,6 +154,7 @@ trait InoxConstraintSolver { self : Constraints =>
         Or(Equals(exprA, typeToExpr(trees.CharType)), 
            FunctionInvocation(isNumericId, Seq(), Seq(exprA)))
       }
+      case AtIndexEqual(a, b, i) => BooleanLiteral(false)
     }
 
     for (constraint <- constraints) {

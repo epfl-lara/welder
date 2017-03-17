@@ -24,7 +24,7 @@ class ExpressionParser(program: InoxProgram) extends TypeParser(program) {
   lazy val nonOperatorExpr: Parser[Expression] = withPrefix(greedyRight) | selectionExpr
 
   lazy val selectableExpr: Parser[Expression] = withPrefix { withApplication {
-    invocationExpr | literalExpr | variableExpr | parensExpr
+    invocationExpr | literalExpr | variableExpr | tupleOrParensExpr
   } } withFailureMessage "Expression expected."
 
   def withApplication(exprParser: Parser[Expression]): Parser[Expression] =
@@ -120,6 +120,12 @@ class ExpressionParser(program: InoxProgram) extends TypeParser(program) {
   lazy val parensExpr: Parser[Expression] = 
     (p('(') ~> expression <~ p(')')) |
     (p('{') ~> expression <~ p('}'))
+
+  lazy val tupleOrParensExpr: Parser[Expression] =
+    p('(') ~> rep1sep(expression, p(',')) <~ p(')') ^^ {
+      case Seq(e) => e
+      case es => Operation("Tuple", es)
+    }
 
   lazy val fdTable = symbols.functions.keys.toSet
 

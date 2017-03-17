@@ -45,6 +45,13 @@ trait ExprIR extends IR with Constraints with InoxConstraintSolver {
 
   //---- Extractors ----//
 
+  object TupleField {
+    def unapply(field: Field): Option[Int] = field match {
+      case FieldName(name) if name.startsWith("_") => scala.util.Try(name.tail.toInt).toOption
+      case _ => None 
+    }
+  }
+
   object Field {
 
     lazy val allFields = symbols.adts.toSeq.flatMap({
@@ -550,6 +557,22 @@ trait ExprIR extends IR with Constraints with InoxConstraintSolver {
       }
     }
 
+    // Tuple Construction.
+    case Operation("Tuple", args) => {
+      val argsTypes = Seq.fill(args.size)(Unknown.fresh)
+
+      Constrained.sequence(args.zip(argsTypes).map({
+        case (e, t) => typeCheck(e, t)
+      })).map({
+        case es => trees.Tuple(es)
+      }).checkImmediate({
+        args.size >= 2
+      }).addConstraint({
+        // This assumes that Tuples are invariant. Is this really the case in Inox ?
+        Constraint.equal(expected, trees.TupleType(argsTypes))
+      })
+    }
+
     // Function application.
     case Application(callee, args) => {
       val expectedCallee = Unknown.fresh
@@ -741,6 +764,20 @@ trait ExprIR extends IR with Constraints with InoxConstraintSolver {
     }
 
     //---- Accessors ----//
+
+    // Tuple Selection.
+    case Selection(expr, TupleField(i)) => {
+      val tupleType = Unknown.fresh
+      val memberType = Unknown.fresh
+
+      typeCheck(expr, tupleType).map({
+        case tuple => trees.TupleSelect(tuple, i)
+      }).addConstraint({
+        Constraint.subtype(memberType, expected)
+      }).addConstraint({
+        Constraint.atIndex(tupleType, memberType, i)
+      })
+    }
 
     // Field Selection.
     case Selection(expr, Field((cons, vd))) => {

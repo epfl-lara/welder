@@ -58,6 +58,7 @@ trait Constraints {
   case class IsComparable(a: Type) extends Constraint(Seq(a))
   case class IsIntegral(a: Type) extends Constraint(Seq(a))
   case class IsBitVector(a: Type) extends Constraint(Seq(a))
+  case class AtIndexEqual(tup: Type, mem: Type, idx: Int) extends Constraint(Seq(tup, mem))
 
   object Constraint {
     def equal(a: Type, b: Type): Constraint = Equal(a, b)
@@ -66,6 +67,7 @@ trait Constraints {
     def isIntegral(a: Type): Constraint = IsIntegral(a)
     def isComparable(a: Type): Constraint = IsComparable(a)
     def isBitVector(a: Type): Constraint = IsBitVector(a)
+    def atIndex(tup: Type, mem: Type, idx: Int) = AtIndexEqual(tup, mem, idx)
   }
 
   /** Represents a set of constraints with a value.
