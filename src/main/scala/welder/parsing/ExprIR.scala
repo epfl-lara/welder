@@ -47,7 +47,7 @@ trait ExprIR extends IR with Constraints with InoxConstraintSolver {
 
   object TupleField {
     def unapply(field: Field): Option[Int] = field match {
-      case FieldName(name) if name.startsWith("_") => scala.util.Try(name.tail.toInt).toOption
+      case FieldName(name) if name.startsWith("_") => scala.util.Try(name.tail.toInt).toOption.filter(_ >= 1)
       case _ => None 
     }
   }
