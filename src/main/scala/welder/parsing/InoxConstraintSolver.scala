@@ -149,7 +149,11 @@ trait InoxConstraintSolver { self : Constraints =>
       case IsNumeric(a) => FunctionInvocation(isNumericId, Seq(), Seq(typeToExpr(a)))
       case IsIntegral(a) => FunctionInvocation(isIntegralId, Seq(), Seq(typeToExpr(a)))
       case IsBitVector(a) => FunctionInvocation(isBitVectorId, Seq(), Seq(typeToExpr(a)))
-      case IsComparable(a) => Or(Equals(typeToExpr(trees.CharType), typeToExpr(trees.CharType)), FunctionInvocation(isNumericId, Seq(), Seq(typeToExpr(a))))
+      case IsComparable(a) => {
+        val exprA = typeToExpr(a)
+        Or(Equals(exprA, typeToExpr(trees.CharType)), 
+           FunctionInvocation(isNumericId, Seq(), Seq(exprA)))
+      }
     }
 
     for (constraint <- constraints) {
