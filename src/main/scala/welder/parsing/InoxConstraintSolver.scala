@@ -41,7 +41,9 @@ trait InoxConstraintSolver { self : Constraints =>
     var constructors: Map[TypeCons, ADTConstructor] = Map()
     var names: Map[Identifier, ADTConstructor] = Map()
     var adtFields: Map[Int, Seq[Identifier]] = Map()
+    var tupleFields: Map[Int, Seq[Identifier]] = Map()
     var variables: Map[Unknown, Variable] = Map()
+    var atIndexIsIds: Map[Int, Identifier] = Map()
 
     def registerName(i: Identifier) {
       val consName = FreshIdentifier("Name_" + i)
@@ -72,6 +74,10 @@ trait InoxConstraintSolver { self : Constraints =>
               val fs = ("name" :: nameType) +: ps
               adtFields += (n -> fs.map(_.id))
               fs
+            }
+            case Tup(n) => {
+              tupleFields += (n -> ps.map(_.id))
+              ps
             }
             case _ => ps
           }
@@ -109,7 +115,7 @@ trait InoxConstraintSolver { self : Constraints =>
       for (inner <- inners) ensureConstructorsExists(inner)
     }
 
-    def ensureConstructorsExistsForConstraint(c: Constraint) {
+    def ensureConstructorsExistForConstraint(c: Constraint) {
       for (tpe <- c.types) {
         ensureConstructorsExists(tpe)
       }
@@ -117,6 +123,17 @@ trait InoxConstraintSolver { self : Constraints =>
       c match {
         case IsComparable(a) => {
           ensureConstructorsExists(trees.CharType)
+        }
+        case _ => ()
+      }
+    }
+
+    def ensureFunctionsIdentifiersExistForConstraint(c: Constraint) {
+      c match {
+        case AtIndexEqual(_, _, i) => {
+          val name = "at" + i + "is"
+          val id = FreshIdentifier(name)
+          atIndexIsIds += (i -> id)
         }
         case _ => ()
       }
@@ -154,11 +171,12 @@ trait InoxConstraintSolver { self : Constraints =>
         Or(Equals(exprA, typeToExpr(trees.CharType)), 
            FunctionInvocation(isNumericId, Seq(), Seq(exprA)))
       }
-      case AtIndexEqual(a, b, i) => BooleanLiteral(false)
+      case AtIndexEqual(a, b, i) => FunctionInvocation(atIndexIsIds(i), Seq(), Seq(typeToExpr(a), typeToExpr(b)))
     }
 
     for (constraint <- constraints) {
-      ensureConstructorsExistsForConstraint(constraint)
+      ensureConstructorsExistForConstraint(constraint)
+      ensureFunctionsIdentifiersExistForConstraint(constraint)
     }
 
     val bvTypes: Seq[Expr] = {
@@ -260,6 +278,31 @@ trait InoxConstraintSolver { self : Constraints =>
       }
     )}
 
+    val atIndexIsFds = {
+
+      atIndexIsIds.toSeq.map({ case (i, id) => 
+        mkFunDef(id)() { case Seq() => (
+          Seq("tup" :: typeType, "mem" :: typeType),
+          BooleanType,
+          { case Seq(tup, mem) =>
+            val zero: Expr = BooleanLiteral(false)
+            constructors.keys.collect({
+              case Tup(k) if k >= i => k
+            }).foldLeft(zero) { (rest: Expr, k: Int) =>
+              val tupleType = ADTType(constructors(Tup(k)).id, Seq())
+
+              if_(IsInstanceOf(tup, tupleType)) {
+                val asTuple = AsInstanceOf(tup, tupleType)
+                Equals(ADTSelector(asTuple, tupleFields(k)(i - 1)), mem)
+              } else_ { 
+                rest
+              }
+            }
+          }
+        )}
+      })
+    }
+
     val allNames = names.values.toSeq
     val nameSort = mkSort(nameId)()(allNames.map(_.id))
     val allConstructors = constructors.values.toSeq
@@ -271,18 +314,20 @@ trait InoxConstraintSolver { self : Constraints =>
 
     val progSymbols = NoSymbols
                     .withADTs(adts)
-                    .withFunctions(Seq(isSubtypeFd, isNumericFd, isIntegralFd, isBitVectorFd))
+                    .withFunctions(Seq(isSubtypeFd, isNumericFd, isIntegralFd, isBitVectorFd) ++ atIndexIsFds)
 
     val program = InoxProgram(Context.empty, progSymbols)
     val solver = program.getSolver.getNewSolver
 
     try {
       for (constraint <- constraints) {
-        solver.assertCnstr(constraintToExpr(constraint))
+        val e = constraintToExpr(constraint)
+        solver.assertCnstr(e)
       }
 
       solver.check(SolverResponses.Model) match {
         case SolverResponses.SatWithModel(model) => {
+
           val unknownTable = variables.map(_.swap)
           val tcTable = constructors.map { case (tc, adtcons) => (adtcons.id -> tc) }
           val adtTable = names.map { case (i, adtcons) => (adtcons.id -> i) }
