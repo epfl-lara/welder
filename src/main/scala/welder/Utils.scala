@@ -39,21 +39,25 @@ object Utils {
     (nominator / gcd, denominator / gcd)
   }
 
-  def toPartial[A, B](f: A => Option[B]): PartialFunction[A, B] = {
-    val cache = new ThreadLocal[B]
+  def toPartial[A <: AnyRef, B](f: A => Option[B]): PartialFunction[A, B] = {
+    val argCache = new ThreadLocal[A]
+    val resultCache = new ThreadLocal[Option[B]] {
+      override def initialValue() = None
+    }
 
     {
       case a if { 
-        val optB = f(a)
-        val isDefined = optB.isDefined
-        if (isDefined) {
-          cache.set(optB.get)
-        } 
-        isDefined
+        if (!(argCache.get eq a)) {
+          argCache.set(a)
+          val optB = f(a)
+          resultCache.set(optB)
+          optB.isDefined
+        }
+        else {
+          resultCache.get.isDefined
+        }
       } => {
-        val ret = cache.get
-        cache.remove()
-        ret
+        resultCache.get.get
       }
     }
   }
