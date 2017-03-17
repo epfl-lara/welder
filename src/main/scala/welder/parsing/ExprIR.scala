@@ -230,7 +230,7 @@ trait ExprIR extends IR with Constraints with InoxConstraintSolver {
     }).addConstraint(if (string.contains(".")) {
       Constraint.equal(expected, trees.RealType)
     } else {
-      Constraint.isNumeric(expected)
+      Constraint.isIntegral(expected)
     })
 
     //---- Variables ----//
