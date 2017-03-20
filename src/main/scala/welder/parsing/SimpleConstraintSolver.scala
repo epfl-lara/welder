@@ -15,10 +15,29 @@ class SimpleConstraintSolver(val program: InoxProgram) {
 
   case class Bounds(lowers: Set[Type], uppers: Set[Type])
 
-  object UnknownChecker {
-    var exists = false
+  object UnknownCollector {
+    var unknowns = Set[Unknown]()
 
-    val traverser = new TreeTraverser {
+    private val traverser = new TreeTraverser {
+      override def traverse(t: Type) {
+        t match {
+          case u: Unknown => unknowns += u
+          case _ => super.traverse(t)
+        } 
+      }
+    }
+
+    def apply(tpe: Type): Set[Unknown] = {
+      unknowns = Set()
+      traverser.traverse(tpe)
+      unknowns
+    }
+  }
+
+  object UnknownChecker {
+    private var exists = false
+
+    private val traverser = new TreeTraverser {
       override def traverse(t: Type) {
         t match {
           case _: Unknown => exists = true
@@ -31,6 +50,58 @@ class SimpleConstraintSolver(val program: InoxProgram) {
       exists = false
       traverser.traverse(t)
       exists
+    }
+  }
+
+
+
+  object UnknownCollectorVariance {
+    var positives = Set[Unknown]()
+    var negatives = Set[Unknown]()
+
+    private val traverser = new TreeTraverser {
+      override def traverse(t: Type) {
+        t match {
+          case u: Unknown => {
+            negatives += u
+            positives += u
+          }
+          case _ => super.traverse(t)
+        } 
+      }
+    }
+
+    private def collect(tpe: Type, isPositive: Boolean): Unit = tpe match {
+      case u: Unknown => if (isPositive) positives += u else negatives += u
+      case FunctionType(fs, t) => {
+        fs.foreach(collect(_, !isPositive))
+        collect(t, isPositive)
+      }
+      case TupleType(ts) => ts.foreach(collect(_, !isPositive))
+      case ADTType(id, ts) => {
+        val adtDef = symbols.getADT(id)
+
+        adtDef.tparams.zip(ts).foreach({
+          case (tpDef, tpe) =>
+            if (tpDef.tp.isCovariant) collect(tpe, isPositive)
+            else if (tpDef.tp.isContravariant) collect(tpe, !isPositive)
+            else traverser.traverse(tpe)
+        })
+      }
+      case SetType(t) => traverser.traverse(t)
+      case BagType(t) => traverser.traverse(t)
+      case MapType(k, v) => {
+        traverser.traverse(k)
+        traverser.traverse(v)
+      }
+      case _ => ()
+    } 
+
+    def apply(t: Type): (Set[Unknown], Set[Unknown]) = {
+      positives = Set[Unknown]()
+      negatives = Set[Unknown]()
+      collect(t, true)
+      (positives, negatives)
     }
   }
 
@@ -366,9 +437,7 @@ class SimpleConstraintSolver(val program: InoxProgram) {
     // println(remaining)
     // println("-------------")
 
-    var stop = false
-
-    while (!stop) {
+    while (!remaining.isEmpty) {
       while (!remaining.isEmpty) {
         val constraint = remaining.head
         remaining = remaining.tail
@@ -383,22 +452,55 @@ class SimpleConstraintSolver(val program: InoxProgram) {
         // println("TupleConstraints: " + tupleConstraints)
       }
 
-      stop = true
-
       // Set the default instance for classes.
-      if (!typeClasses.isEmpty) {
+      typeClasses.foreach({
+        case (t, Integral | Numeric) => remaining +:= Equal(t, IntegerType)
+        case (t, Bits) => remaining +:= Equal(t, Int32Type)
+        case _ => ()
+      })
 
-        val defaults = typeClasses.map({
-          case (t, IsIntegral(_) | IsNumeric(_)) => Some(Equal(t, IntegerType))  // BigInt by default.
-          case (t, IsBitVector(_)) => Some(Equal(t, Int32Type))
-          case _ => None
-        }).flatten
+      val (inUppersAll, inLowersAll) = bounds.toSeq.map({
+        case (u, Bounds(ls, us)) => {
+          val (plss, nlss) = ls.map(UnknownCollectorVariance(_)).unzip
+          val (puss, nuss) = us.map(UnknownCollectorVariance(_)).unzip
 
-        if (!defaults.isEmpty) {
-          stop = false
-          remaining ++= defaults
+          val pus = puss.fold(Set[Unknown]())(_ ++ _)
+          val nus = nuss.fold(Set[Unknown]())(_ ++ _)
+          val pls = plss.fold(Set[Unknown]())(_ ++ _)
+          val nls = nlss.fold(Set[Unknown]())(_ ++ _)
+
+          ((pus ++ nls) - u, (pls ++ nus) - u)
         }
-      }
+      }).unzip
+
+      val inUppers = inUppersAll.fold(Set[Unknown]())(_ ++ _)
+      val inLowers = inLowersAll.fold(Set[Unknown]())(_ ++ _)
+
+      // println(bounds)
+      // println(inLowers)
+      // println(inUppers)
+
+      bounds.foreach({
+        case (u, Bounds(ls, us)) => {
+          val uInUps = us.map(UnknownCollector(_)).fold(Set[Unknown]())(_ ++ _)
+          val uInLws = ls.map(UnknownCollector(_)).fold(Set[Unknown]())(_ ++ _)
+
+          if (!us.isEmpty && uInUps.isEmpty && !inLowers.contains(u)) {
+            val bound = symbols.greatestLowerBound(us.toSeq)
+            if (bound == Untyped) {
+              throw new Exception("The following types are incompatible: " + us)
+            }
+            remaining +:= Equal(u, bound)
+          }
+          else if (!ls.isEmpty && uInLws.isEmpty && !inUppers.contains(u)) {
+            val bound = symbols.leastUpperBound(ls.toSeq)
+            if (bound == Untyped) {
+              throw new Exception("The following types are incompatible: " + ls)
+            }
+            remaining +:= Equal(u, bound)
+          }
+        }
+      })
     }
 
     // println("-------------")
