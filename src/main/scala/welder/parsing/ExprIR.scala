@@ -246,7 +246,7 @@ class ExprIR(val program: InoxProgram) extends IR {
     }).checkImmediate({
       store.contains(i.uniqueName)
     }).addConstraint({
-      Constraint.subtype(store(i.uniqueName)._2, expected)
+      Constraint.equal(store(i.uniqueName)._2, expected)
     })
 
     // Variable.
@@ -256,7 +256,7 @@ class ExprIR(val program: InoxProgram) extends IR {
     }).checkImmediate({
       store.contains(variable.getName)
     }).addConstraint({
-      Constraint.subtype(store(variable.getName)._2, expected)
+      Constraint.equal(store(variable.getName)._2, expected)
     })
 
     //---- Embedded values ----//
@@ -265,7 +265,7 @@ class ExprIR(val program: InoxProgram) extends IR {
     case Literal(EmbeddedExpr(e)) => Constrained.pure({
       e
     }).addConstraint({
-      Constraint.subtype(e.getType(symbols), expected)
+      Constraint.equal(e.getType(symbols), expected)
     })
 
     // Embedded Scala values.
@@ -488,11 +488,11 @@ class ExprIR(val program: InoxProgram) extends IR {
         // Their should be the same number of argument applied than parameters of the function.
         args.length == fd.params.length
       }).addConstraints({
-        // The types of arguments should be of the type of the parameters.
-        freshs.zip(paramTypes).map({ case (a, b) => Constraint.equal(a, b) })
+        // The types of arguments should be subtype of the type of the parameters.
+        freshs.zip(paramTypes).map({ case (a, b) => Constraint.subtype(a, b) })
       }).addConstraint({
-        // The return type of the function should be a subtype of what is expected.
-        Constraint.subtype(instantiator.transform(fd.returnType), expected)
+        // The return type of the function should be what is expected.
+        Constraint.equal(instantiator.transform(fd.returnType), expected)
       })
 
       optTpeArgs match {
@@ -540,11 +540,11 @@ class ExprIR(val program: InoxProgram) extends IR {
         // Their should be the same number of argument applied than parameters of the function.
         args.length == cons.fields.length
       }).addConstraints({
-        // The types of arguments should be of the type of the parameters.
-        freshs.zip(paramTypes).map({ case (a, b) => Constraint.equal(a, b) })
+        // The types of arguments should be subtypes of the parameters.
+        freshs.zip(paramTypes).map({ case (a, b) => Constraint.subtype(a, b) })
       }).addConstraint({
-        // The return type of the constructor application should be a subtype of what is expected.
-        Constraint.subtype(cons.typed(typeParamToFresh.map(_._2))(symbols).toType, expected)
+        // The return type of the constructor application should be  what is expected.
+        Constraint.equal(cons.typed(typeParamToFresh.map(_._2))(symbols).toType, expected)
       })
 
       optTpeArgs match {
@@ -590,9 +590,9 @@ class ExprIR(val program: InoxProgram) extends IR {
       }).map({
         case exprs => trees.Application(exprs.head, exprs.tail)
       }).addConstraint({
-        Constraint.equal(expectedCallee, trees.FunctionType(expectedArgs, retType))
+        Constraint.subtype(expectedCallee, trees.FunctionType(expectedArgs, retType))
       }).addConstraint({
-        Constraint.subtype(retType, expected)
+        Constraint.equal(retType, expected)
       })
     }
 
@@ -764,8 +764,8 @@ class ExprIR(val program: InoxProgram) extends IR {
       typeCheck(expr, sub).map({
         (e: trees.Expr) => trees.AsInstanceOf(e, tpe)
       }).addConstraint({
-        // The type of the casted expression should be a subtype of the expected type.
-        Constraint.subtype(tpe, expected)
+        // The type of the casted expression is the expected type.
+        Constraint.equal(tpe, expected)
       }).addConstraint({
         // There should exist a type which is a (non-strict) super type of the annotated type...
         Constraint.subtype(tpe, sup)
@@ -783,7 +783,7 @@ class ExprIR(val program: InoxProgram) extends IR {
         (e: trees.Expr) => trees.IsInstanceOf(e, tpe)
       }).addConstraint({
         // The expected type should be Boolean.
-        Constraint.subtype(expected, trees.BooleanType)
+        Constraint.equal(expected, trees.BooleanType)
       }).addConstraint({
         // There should exist a type which is a (non-strict) super type of the annotated type...
         Constraint.subtype(tpe, sup)
@@ -803,7 +803,7 @@ class ExprIR(val program: InoxProgram) extends IR {
       typeCheck(expr, tupleType).map({
         case tuple => trees.TupleSelect(tuple, i)
       }).addConstraint({
-        Constraint.subtype(memberType, expected)
+        Constraint.equal(memberType, expected)
       }).addConstraint({
         Constraint.atIndex(tupleType, memberType, i)
       })
@@ -825,8 +825,8 @@ class ExprIR(val program: InoxProgram) extends IR {
       typeCheck(expr, expectedExpr).map({
         (e: trees.Expr) => trees.ADTSelector(e, vd.id)
       }).addConstraint({
-        // The field type should be a subtype of what is expected.
-        Constraint.subtype(fieldType, expected)
+        // The field type should be what is expected.
+        Constraint.equal(fieldType, expected)
       }).addConstraint({
         // The type of the expression being selected should be exactly
         // that of the ADT constructor.
