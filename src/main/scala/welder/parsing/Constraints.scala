@@ -30,6 +30,39 @@ trait Constraints {
     }
   }
 
+  sealed abstract class TypeClass {
+    def &(that: TypeClass) = (this, that) match {
+      case (Bits, _) => Bits
+      case (_, Bits) => Bits
+      case (Integral, _) => Integral
+      case (_, Integral) => Integral
+      case (Numeric, _) => Numeric
+      case (_, Numeric) => Numeric
+      case _ => Comparable
+    }
+
+    def hasInstance(tpe: Type): Boolean
+  }
+  case object Comparable extends TypeClass {
+    override def hasInstance(tpe: Type) = {
+      tpe == trees.CharType || Numeric.hasInstance(tpe)
+    }
+  }
+  case object Numeric extends TypeClass {
+    override def hasInstance(tpe: Type) = {
+      tpe == trees.RealType || Integral.hasInstance(tpe)
+    }
+  }
+  case object Integral extends TypeClass {
+    override def hasInstance(tpe: Type) = {
+      tpe == trees.IntegerType || Bits.hasInstance(tpe)
+    }
+  }
+  case object Bits extends TypeClass {
+    override def hasInstance(tpe: Type) =
+      tpe.isInstanceOf[trees.BVType]
+  }
+
   /** Maps meta type-parameters to actual types. */
   class Unifier(mappings: Map[Unknown, Type]) {
 
@@ -44,10 +77,7 @@ trait Constraints {
     def apply(c: Constraint): Constraint = c match {
       case Equal(a, b) => Equal(instantiator.transform(a), instantiator.transform(b))
       case Subtype(a, b) => Subtype(instantiator.transform(a), instantiator.transform(b))
-      case IsNumeric(a) => IsNumeric(instantiator.transform(a))
-      case IsComparable(a) => IsComparable(instantiator.transform(a))
-      case IsIntegral(a) => IsIntegral(instantiator.transform(a))
-      case IsBitVector(a) => IsBitVector(instantiator.transform(a))
+      case HasClass(a, c) => HasClass(instantiator.transform(a), c)
       case AtIndexEqual(a, b, idx) => AtIndexEqual(instantiator.transform(a), instantiator.transform(b), idx)
     }
   }
@@ -56,19 +86,16 @@ trait Constraints {
   abstract class Constraint(val types: Seq[Type])
   case class Equal(a: Type, b: Type) extends Constraint(Seq(a, b))
   case class Subtype(sub: Type, sup: Type) extends Constraint(Seq(sub, sup))
-  case class IsNumeric(a: Type) extends Constraint(Seq(a))
-  case class IsComparable(a: Type) extends Constraint(Seq(a))
-  case class IsIntegral(a: Type) extends Constraint(Seq(a))
-  case class IsBitVector(a: Type) extends Constraint(Seq(a))
+  case class HasClass(a: Type, c: TypeClass) extends Constraint(Seq(a))
   case class AtIndexEqual(tup: Type, mem: Type, idx: Int) extends Constraint(Seq(tup, mem))
 
   object Constraint {
     def equal(a: Type, b: Type): Constraint = Equal(a, b)
     def subtype(a: Type, b: Type): Constraint = Subtype(a, b)
-    def isNumeric(a: Type): Constraint = IsNumeric(a)
-    def isIntegral(a: Type): Constraint = IsIntegral(a)
-    def isComparable(a: Type): Constraint = IsComparable(a)
-    def isBitVector(a: Type): Constraint = IsBitVector(a)
+    def isNumeric(a: Type): Constraint = HasClass(a, Numeric)
+    def isIntegral(a: Type): Constraint = HasClass(a, Integral)
+    def isComparable(a: Type): Constraint = HasClass(a, Comparable)
+    def isBitVector(a: Type): Constraint = HasClass(a, Bits)
     def atIndex(tup: Type, mem: Type, idx: Int) = AtIndexEqual(tup, mem, idx)
   }
 

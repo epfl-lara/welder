@@ -62,7 +62,7 @@ class SimpleConstraintSolver(val program: InoxProgram) {
     var remaining: Seq[Constraint] = constraints
     var substitutions: Map[Unknown, Type] = Map()
     var bounds: Map[Unknown, Bounds] = Map()
-    var typeClasses: Map[Unknown, Constraint] = Map()
+    var typeClasses: Map[Unknown, TypeClass] = Map()
     var tupleConstraints: Map[Unknown, Set[Constraint]] = Map()
 
     def substitute(u: Unknown, t: Type) {
@@ -72,7 +72,6 @@ class SimpleConstraintSolver(val program: InoxProgram) {
       substitutions = substitutions.mapValues(subst(_))
       substitutions += (u -> t)
       tupleConstraints = tupleConstraints.mapValues(_.map(subst(_)))
-      typeClasses = typeClasses.mapValues(subst(_))
 
       bounds = bounds.mapValues {
         case Bounds(ls, us) => Bounds(ls.map(subst(_)), us.map(subst(_)))
@@ -102,10 +101,10 @@ class SimpleConstraintSolver(val program: InoxProgram) {
       }
 
       // If the variable we are substituting has a class constraint...
-      typeClasses.get(u).foreach { (c: Constraint) =>
+      typeClasses.get(u).foreach { (c: TypeClass) =>
 
         // We reintroduce this constraints.
-        remaining +:= c
+        remaining +:= HasClass(t, c)
 
         // Remove the entry for the variable.
         typeClasses -= u
@@ -154,15 +153,11 @@ class SimpleConstraintSolver(val program: InoxProgram) {
       case BagType(_) | SetType(_) | MapType(_, _) => true // Those are invariant.
     }
 
-    def strongerClass(a: Constraint, b: Constraint) = (a, b) match {
-      case (IsBitVector(_), _) => a
-      case (_, IsBitVector(_)) => b
-      case (IsIntegral(_), _) => a
-      case (_, IsIntegral(_)) => b
-      case (IsNumeric(_), _) => a
-      case (_, IsNumeric(_)) => b
-      case (IsComparable(_), _) => a
-      case (_, IsComparable(_)) => b
+    def className(c: TypeClass) = c match {
+      case Comparable => "comparable"
+      case Numeric => "numeric"
+      case Integral => "integral"
+      case Bits => "a bit vector"
     }
 
     def handle(constraint: Constraint) {
@@ -325,7 +320,7 @@ class SimpleConstraintSolver(val program: InoxProgram) {
         case AtIndexEqual(a, b, i) => a match {
           case u: Unknown => {
             typeClasses.get(u).foreach {
-              case _ => throw new Error("Type " + a + " can not be both a tuple and have classes.")  // TODO: Nicer error message.
+              case c => throw new Exception("Type " + a + " can not be both a tuple and " + className(c))
             }
             tupleConstraints += (u -> (tupleConstraints.get(u).getOrElse(Set()) + constraint))
           }
@@ -341,89 +336,29 @@ class SimpleConstraintSolver(val program: InoxProgram) {
             throw new Exception("Type " + a + " is not a tuple.")
           }
         }
-        case IsBitVector(a) => a match {
-          case u: Unknown => {
-            bounds.get(u).foreach {
-              case Bounds(ls, us) => {
-                remaining ++= ls.map(Equal(u, _))  // Member of this type class are flat.
-                remaining ++= us.map(Equal(u, _))
-              }
+        case HasClass(a, c) => {
+          a match {
+            case u: Unknown => {
+              bounds.get(u).foreach {
+                case Bounds(ls, us) => {
+                  // Member of type classes are flat.
+                  remaining ++= ls.map(Equal(u, _))
+                  remaining ++= us.map(Equal(u, _))
+                }
 
-              bounds -= u
-            }
-            tupleConstraints.get(u).foreach {
-              case _ => throw new Error("Type " + a + " can not be both a bit vector and a tuple.")
-            }
-            typeClasses += (u -> { typeClasses.get(u) match {
-              case None => constraint
-              case Some(c) => strongerClass(constraint, c)
-            }})
-          }
-          case BVType(_) => ()
-          case _ => throw new Exception("Type " + a + " is not a bit vector.")
-        }
-        case IsIntegral(a) => a match {
-          case u: Unknown => {
-            bounds.get(u).foreach {
-              case Bounds(ls, us) => {
-                remaining ++= ls.map(Equal(u, _))  // Member of this type class are flat.
-                remaining ++= us.map(Equal(u, _))
+                bounds -= u
               }
-
-              bounds -= u
-            }
-            tupleConstraints.get(u).foreach {
-              case _ => throw new Error("Type " + a + " can not be both an integer and a tuple.")
-            }
-            typeClasses += (u -> { typeClasses.get(u) match {
-              case None => constraint
-              case Some(c) => strongerClass(constraint, c)
-            }})
-          }
-          case BVType(_) | IntegerType => ()
-          case _ => throw new Exception("Type " + a + " is not numeric.")
-        }
-        case IsNumeric(a) => a match {
-          case u: Unknown => {
-            bounds.get(u).foreach {
-              case Bounds(ls, us) => {
-                remaining ++= ls.map(Equal(u, _))  // Member of this type class are flat.
-                remaining ++= us.map(Equal(u, _))
+              tupleConstraints.get(u).foreach {
+                case _ => throw new Exception("Type " + a + " can not be both a tuple and " + className(c))
               }
-
-              bounds -= u
+              typeClasses += (u -> { typeClasses.get(u) match {
+                case None => c
+                case Some(c2) => c & c2
+              }})
             }
-            tupleConstraints.get(u).foreach {
-              case _ => throw new Error("Type " + a + " can not be both numeric and a tuple.")
-            }
-            typeClasses += (u -> { typeClasses.get(u) match {
-              case None => constraint
-              case Some(c) => strongerClass(constraint, c)
-            }})
+            case _ if c.hasInstance(a) => ()
+            case _ => throw new Exception("Type " + a + " is not " + className(c))
           }
-          case BVType(_) | RealType | IntegerType => ()
-          case _ => throw new Exception("Type " + a + " is not numeric.")
-        }
-        case IsComparable(a) => a match {
-          case u: Unknown => {
-            bounds.get(u).foreach {
-              case Bounds(ls, us) => {
-                remaining ++= ls.map(Equal(u, _))  // Member of this type class are flat.
-                remaining ++= us.map(Equal(u, _))
-              }
-
-              bounds -= u
-            }
-            tupleConstraints.get(u).foreach {
-              case _ => throw new Error("Type " + a + " can not be both comparable and a tuple.")
-            }
-            typeClasses += (u -> { typeClasses.get(u) match {
-              case None => constraint
-              case Some(c) => strongerClass(constraint, c)
-            }})
-          }
-          case BVType(_) | RealType | IntegerType | CharType => ()
-          case _ => throw new Exception("Type " + a + " is not comparable.")
         }
       }
     }
@@ -468,6 +403,10 @@ class SimpleConstraintSolver(val program: InoxProgram) {
 
     // println("-------------")
     // println("Substitution: " + substitutions)
+
+    if (!typeClasses.isEmpty || !bounds.isEmpty) {
+      throw new Exception("Ambiguity. Try using type annotations.")
+    }
 
     Some(new Unifier(substitutions))
   }
