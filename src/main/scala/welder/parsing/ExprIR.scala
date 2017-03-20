@@ -4,10 +4,13 @@ package parsing
 import inox._
 
 /** IR for expressions. */
-trait ExprIR extends IR with Constraints with InoxConstraintSolver {
-  
-  val trees: inox.ast.Trees
-  val symbols: trees.Symbols
+class ExprIR(val program: InoxProgram) extends IR {
+
+  import program.trees
+  import program.symbols
+
+  val solver = new SimpleConstraintSolver(program)
+  import solver.constraints._
 
   sealed abstract class Identifier {
     def getName: String
@@ -169,7 +172,7 @@ trait ExprIR extends IR with Constraints with InoxConstraintSolver {
 
     typeCheck(expr, topType)(Map()) match {
       case Unsatifiable => None
-      case WithConstraints(elaborator, constraints) => solveConstraints(constraints).map { 
+      case WithConstraints(elaborator, constraints) => solver.solveConstraints(constraints).map { 
         (unifier: Unifier) => elaborator(unifier)
       }
     }
@@ -231,7 +234,7 @@ trait ExprIR extends IR with Constraints with InoxConstraintSolver {
     }).addConstraint(if (string.contains(".")) {
       Constraint.equal(expected, trees.RealType)
     } else {
-      Constraint.isIntegral(expected)
+      Constraint.isNumeric(expected)
     })
 
     //---- Variables ----//

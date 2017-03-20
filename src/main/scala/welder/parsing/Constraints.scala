@@ -35,7 +35,7 @@ trait Constraints {
 
     val instantiator = new trees.SelfTreeTransformer {
       override def transform(tpe: Type) = tpe match {
-        case u: Unknown if mappings.contains(u) => transform(mappings(u))  // TODO: Is the recursive call necessary ?
+        case u: Unknown => if (mappings.contains(u)) mappings(u) else u
         case _ => super.transform(tpe)
       }
     }
@@ -47,6 +47,8 @@ trait Constraints {
       case IsNumeric(a) => IsNumeric(instantiator.transform(a))
       case IsComparable(a) => IsComparable(instantiator.transform(a))
       case IsIntegral(a) => IsIntegral(instantiator.transform(a))
+      case IsBitVector(a) => IsBitVector(instantiator.transform(a))
+      case AtIndexEqual(a, b, idx) => AtIndexEqual(instantiator.transform(a), instantiator.transform(b), idx)
     }
   }
 

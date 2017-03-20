@@ -9,16 +9,14 @@ import inox.{InoxProgram, FreshIdentifier}
 
 import welder.parsing._
 
-class ExpressionParser(program: InoxProgram) extends TypeParser(program) {
+class ExpressionParser(program: InoxProgram) extends TypeParser(program) { self =>
 
   import lexical.{Identifier => _, Quantifier => _, _}
 
-  val eir = new ExprIR {
-    override val trees = program.trees
-    override val symbols = program.symbols
-  }
-
+  val eir = new ExprIR(program)
+  
   import eir._
+  import eir.program.trees
 
   lazy val expression: Parser[Expression] = (greedyRight | operatorExpr) withFailureMessage "Expression expected."
   lazy val nonOperatorExpr: Parser[Expression] = withPrefix(greedyRight) | selectionExpr
