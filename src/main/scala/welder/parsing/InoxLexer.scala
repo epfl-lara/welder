@@ -59,7 +59,7 @@ class InoxLexer(val program: InoxProgram) extends StdLexical with StringContextL
   val colon: Parser[Token] = ':' ^^^ Punctuation(':')
   val punctuation: Parser[Token] = comma | dot | colon
 
-  val number = rep1(digit) ~ opt('.' ~> rep(digit)) ^^ {
+  val number = rep1(digit) ~ opt('.' ~> rep1(digit)) ^^ {
     case ds ~ None     => NumericLit(ds.mkString)
     case ds ~ Some(rs) => NumericLit(ds.mkString + "." + rs.mkString)
   }
