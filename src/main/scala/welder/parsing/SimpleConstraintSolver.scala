@@ -453,36 +453,36 @@ class SimpleConstraintSolver(val program: InoxProgram) {
         case _ => ()
       })
 
-      val (inUppersAll, inLowersAll) = bounds.toSeq.map({
-        case (u, Bounds(ls, us)) => {
-          val (plss, nlss) = ls.map(UnknownCollectorVariance(_)).unzip
-          val (puss, nuss) = us.map(UnknownCollectorVariance(_)).unzip
+      // val (inUppersAll, inLowersAll) = bounds.toSeq.map({
+      //   case (u, Bounds(ls, us)) => {
+      //     val (plss, nlss) = ls.map(UnknownCollectorVariance(_)).unzip
+      //     val (puss, nuss) = us.map(UnknownCollectorVariance(_)).unzip
 
-          val pus = puss.fold(Set[Unknown]())(_ ++ _)
-          val nus = nuss.fold(Set[Unknown]())(_ ++ _)
-          val pls = plss.fold(Set[Unknown]())(_ ++ _)
-          val nls = nlss.fold(Set[Unknown]())(_ ++ _)
+      //     val pus = puss.fold(Set[Unknown]())(_ ++ _)
+      //     val nus = nuss.fold(Set[Unknown]())(_ ++ _)
+      //     val pls = plss.fold(Set[Unknown]())(_ ++ _)
+      //     val nls = nlss.fold(Set[Unknown]())(_ ++ _)
 
-          ((pus ++ nls) - u, (pls ++ nus) - u)
-        }
-      }).unzip
+      //     ((pus ++ nls) - u, (pls ++ nus) - u)
+      //   }
+      // }).unzip
 
-      val inUppers = inUppersAll.fold(Set[Unknown]())(_ ++ _)
-      val inLowers = inLowersAll.fold(Set[Unknown]())(_ ++ _)
+      // val inUppers = inUppersAll.fold(Set[Unknown]())(_ ++ _)
+      // val inLowers = inLowersAll.fold(Set[Unknown]())(_ ++ _)
 
       bounds.foreach({
         case (u, Bounds(ls, us)) => {
           val uInUps = us.map(UnknownCollector(_)).fold(Set[Unknown]())(_ ++ _)
           val uInLws = ls.map(UnknownCollector(_)).fold(Set[Unknown]())(_ ++ _)
 
-          if (!us.isEmpty && uInUps.isEmpty && !inLowers.contains(u)) {
+          if (!us.isEmpty && uInUps.isEmpty /* && !inLowers.contains(u) */) {
             val bound = symbols.greatestLowerBound(us.toSeq)
             if (bound == Untyped) {
               throw new Exception("The following types are incompatible: " + us)
             }
             remaining +:= Equal(u, bound)
           }
-          else if (!ls.isEmpty && uInLws.isEmpty && !inUppers.contains(u)) {
+          else if (!ls.isEmpty && uInLws.isEmpty /* && !inUppers.contains(u) */) {
             val bound = symbols.leastUpperBound(ls.toSeq)
             if (bound == Untyped) {
               throw new Exception("The following types are incompatible: " + ls)
