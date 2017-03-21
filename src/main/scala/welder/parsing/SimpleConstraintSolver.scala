@@ -132,6 +132,9 @@ class SimpleConstraintSolver(val program: InoxProgram) {
 
   def solveConstraints(constraints: Seq[Constraint]): Unifier = {
 
+    var unknowns: Set[Unknown] = constraints.flatMap({
+      case cs => cs.types.flatMap(UnknownCollector(_))
+    }).toSet
     var remaining: Seq[Constraint] = constraints
     var substitutions: Map[Unknown, Type] = Map()
     var bounds: Map[Unknown, Bounds] = Map()
@@ -140,7 +143,7 @@ class SimpleConstraintSolver(val program: InoxProgram) {
 
     def substitute(u: Unknown, t: Type) {
       val subst = new Unifier(Map(u -> t))
-
+      unknowns -= u
       remaining = remaining.map(subst(_))
       substitutions = substitutions.mapValues(subst(_))
       substitutions += (u -> t)
@@ -490,7 +493,7 @@ class SimpleConstraintSolver(val program: InoxProgram) {
       })
     }
 
-    if (!typeClasses.isEmpty || !bounds.isEmpty) {
+    if (!unknowns.isEmpty) {
       throw new Exception("Ambiguity. Try using type annotations.")
     }
 
