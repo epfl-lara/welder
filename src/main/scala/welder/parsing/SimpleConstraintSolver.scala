@@ -39,10 +39,12 @@ class SimpleConstraintSolver(val program: InoxProgram) {
 
     private val traverser = new TreeTraverser {
       override def traverse(t: Type) {
-        t match {
-          case _: Unknown => exists = true
-          case _ => super.traverse(t)
-        } 
+        if (!exists) {
+          t match {
+            case _: Unknown => exists = true
+            case _ => super.traverse(t)
+          }
+        }
       }
     }
 
