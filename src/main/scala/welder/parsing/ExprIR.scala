@@ -480,6 +480,24 @@ class ExprIR(val program: InoxProgram) extends IR {
 
     //---- Operations on Set ----//
 
+    // Call to the Set constructor.
+    case Application(Variable(IdentifierName("Set")), es) => {
+      val upper = Unknown.fresh
+      val lowers = Seq.fill(es.length) { Unknown.fresh }
+
+      Constrained.withUnifier({ (unifier: Unifier) => 
+        (elems: Seq[trees.Expr]) => trees.FiniteSet(elems, unifier(upper))
+      }).app({
+        Constrained.sequence(es.zip(lowers).map{
+          case (e, lower) => typeCheck(e, lower).addConstraint({
+            Constraint.subtype(lower, upper)
+          })
+        })
+      }).addConstraint({
+        Constraint.equal(expected, trees.SetType(upper))
+      })
+    }
+
     // Call to contains.
     case ContainsOperation(set, elem) => {
       val setType = Unknown.fresh
