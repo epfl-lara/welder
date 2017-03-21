@@ -496,6 +496,4 @@ class SimpleConstraintSolver(val program: InoxProgram) {
 
     Some(new Unifier(substitutions))
   }
-
-
 }
