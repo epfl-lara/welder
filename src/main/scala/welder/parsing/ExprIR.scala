@@ -793,6 +793,14 @@ class ExprIR(val program: InoxProgram) extends IR {
       })
     }
 
+    // Type Annotation.
+    case TypeApplication(Selection(expr, FieldName("as")), Seq(tpe)) => {
+      typeCheck(expr, expected).addConstraint({
+        // The type of the casted expression is the expected type.
+        Constraint.equal(tpe, expected)
+      })
+    }
+
     //---- Accessors ----//
 
     // Tuple Selection.
