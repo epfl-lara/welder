@@ -213,9 +213,6 @@ class ExpressionParser(program: InoxProgram) extends TypeParser(program) { self 
 
   lazy val typeArguments: Parser[List[Type]] = p('[') ~> rep1sep(inoxType, p(',')) <~ p(']')
 
-  lazy val inoxExpr: Parser[trees.Expr] = expression ^? irToInoxExpr
-  lazy val irToInoxExpr: PartialFunction[Expression, trees.Expr] = Utils.toPartial(toInoxExpr(_))
-
   lazy val inoxValDef: Parser[trees.ValDef] = for {
     i <- identifier
     _ <- p(':')

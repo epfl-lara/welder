@@ -130,7 +130,7 @@ class SimpleConstraintSolver(val program: InoxProgram) {
     }
   }
 
-  def solveConstraints(constraints: Seq[Constraint]): Option[Unifier] = {
+  def solveConstraints(constraints: Seq[Constraint]): Unifier = {
 
     var remaining: Seq[Constraint] = constraints
     var substitutions: Map[Unknown, Type] = Map()
@@ -494,6 +494,6 @@ class SimpleConstraintSolver(val program: InoxProgram) {
       throw new Exception("Ambiguity. Try using type annotations.")
     }
 
-    Some(new Unifier(substitutions))
+    new Unifier(substitutions)
   }
 }

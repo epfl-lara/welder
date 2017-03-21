@@ -167,13 +167,12 @@ class ExprIR(val program: InoxProgram) extends IR {
   }
 
   /** Conversion to Inox expression. */
-  def toInoxExpr(expr: Expression): Option[trees.Expr] = {
-    val topType = Unknown.fresh
-
-    typeCheck(expr, topType)(Map()) match {
-      case Unsatifiable => None
-      case WithConstraints(elaborator, constraints) => solver.solveConstraints(constraints).map { 
-        (unifier: Unifier) => elaborator(unifier)
+  def toInoxExpr(expr: Expression): trees.Expr = {
+    typeCheck(expr, Unknown.fresh)(Map()) match {
+      case Unsatifiable => throw new Exception("Unsatifiable.")
+      case WithConstraints(elaborator, constraints) => {
+        val unifier = solver.solveConstraints(constraints)
+        elaborator(unifier)
       }
     }
   }
