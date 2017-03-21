@@ -794,9 +794,11 @@ class ExprIR(val program: InoxProgram) extends IR {
 
     // Type Annotation.
     case TypeApplication(Selection(expr, FieldName("as")), Seq(tpe)) => {
-      typeCheck(expr, expected).addConstraint({
-        // The type of the casted expression is the expected type.
+      val sub = Unknown.fresh
+      typeCheck(expr, sub).addConstraint({
         Constraint.equal(tpe, expected)
+      }).addConstraint({
+        Constraint.subtype(sub, expected)
       })
     }
 
