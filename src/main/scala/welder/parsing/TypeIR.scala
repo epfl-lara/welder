@@ -23,6 +23,17 @@ trait TypeIR extends IR {
   case object Tuple extends Operator
   case object Arrow extends Operator
 
+  object BVType {
+    def unapply(name: String): Option[trees.Type] = {
+      if (name.startsWith("Int")) {
+        scala.util.Try(name.drop(3).toInt).toOption.filter(_ > 0).map(trees.BVType(_))
+      }
+      else {
+        None
+      }
+    }
+  }
+
   lazy val basic: Map[Value, trees.Type] = Seq(
     "Boolean" -> trees.BooleanType,
     "BigInt"  -> trees.IntegerType,
@@ -80,6 +91,8 @@ trait TypeIR extends IR {
     } yield appl
 
     case Literal(EmbeddedType(t)) => Some(t)
+
+    case Literal(Name(BVType(t))) => Some(t)
 
     case Literal(value) => basic.get(value)
 
