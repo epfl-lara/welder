@@ -19,12 +19,12 @@ class ExpressionParser(program: InoxProgram) extends TypeParser(program) { self 
   import eir.program.trees
 
   lazy val expression: Parser[Expression] = (greedyRight | operatorExpr) withFailureMessage "Expression expected."
-  lazy val nonOperatorExpr: Parser[Expression] = withPrefix(greedyRight) | selectionExpr
+  lazy val nonOperatorExpr: Parser[Expression] = withPrefix(greedyRight | selectionExpr)
 
-  lazy val selectableExpr: Parser[Expression] = withPrefix { withApplication {
+  lazy val selectableExpr: Parser[Expression] = withApplication {
     invocationExpr | literalExpr | variableExpr | tupleOrParensExpr
-  } } withFailureMessage "Expression expected."
-
+  }
+  
   def withApplication(exprParser: Parser[Expression]): Parser[Expression] =
     for {
       expr <- exprParser
