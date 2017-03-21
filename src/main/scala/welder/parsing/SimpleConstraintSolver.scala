@@ -434,22 +434,11 @@ class SimpleConstraintSolver(val program: InoxProgram) {
       }
     }
 
-    // println(remaining)
-    // println("-------------")
-
     while (!remaining.isEmpty) {
       while (!remaining.isEmpty) {
         val constraint = remaining.head
         remaining = remaining.tail
-        // println()
-        // println(constraint)
-        // println()
         handle(constraint)
-
-        // println("Remaining: " + remaining)
-        // println("Bounds: " + bounds)
-        // println("Classes: " + typeClasses)
-        // println("TupleConstraints: " + tupleConstraints)
       }
 
       // Set the default instance for classes.
@@ -476,10 +465,6 @@ class SimpleConstraintSolver(val program: InoxProgram) {
       val inUppers = inUppersAll.fold(Set[Unknown]())(_ ++ _)
       val inLowers = inLowersAll.fold(Set[Unknown]())(_ ++ _)
 
-      // println(bounds)
-      // println(inLowers)
-      // println(inUppers)
-
       bounds.foreach({
         case (u, Bounds(ls, us)) => {
           val uInUps = us.map(UnknownCollector(_)).fold(Set[Unknown]())(_ ++ _)
@@ -502,9 +487,6 @@ class SimpleConstraintSolver(val program: InoxProgram) {
         }
       })
     }
-
-    // println("-------------")
-    // println("Substitution: " + substitutions)
 
     if (!typeClasses.isEmpty || !bounds.isEmpty) {
       throw new Exception("Ambiguity. Try using type annotations.")
