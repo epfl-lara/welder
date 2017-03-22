@@ -250,6 +250,46 @@ class ExprIR(val program: InoxProgram) extends IR {
     }
   }
 
+  object Binding {
+    def unapply(expr: Expression): Option[(Expression, Expression)] = expr match {
+      case Operation("->", Seq(a, b)) => Some((a, b))
+      case _ => None
+    }
+
+    def getAll(es: Seq[Expression]): Option[Seq[(Expression, Expression)]] = {
+      val bs = es.collect({
+        case Binding(a, b) => (a, b)
+      })
+
+      if (bs.length == es.length) {
+        Some(bs)
+      }
+      else {
+        None
+      }
+    }
+  }
+
+  object BagConstruction {
+    def unapply(expr: Expression): Option[(Seq[(Expression, Expression)], Option[Type])] = expr match {
+      case Application(TypeApplication(Literal(Name(bi.BuiltIn(bi.BagConstructor))), Seq(tpe)), es) => 
+        Binding.getAll(es).map((_, Some(tpe)))
+      case Application(Literal(Name(bi.BuiltIn(bi.BagConstructor))), es) => 
+        Binding.getAll(es).map((_, None))
+      case _ => None
+    }
+  }
+
+  object MapConstruction {
+    def unapply(expr: Expression): Option[(Expression, Seq[(Expression, Expression)], Option[(Type, Type)])] = expr match {
+      case Application(TypeApplication(Literal(Name(bi.BuiltIn(bi.MapConstructor))), Seq(tpe1, tpe2)), Seq(e, es @ _*)) => 
+        Binding.getAll(es).map((e, _, Some((tpe1, tpe2))))
+      case Application(Literal(Name(bi.BuiltIn(bi.MapConstructor))), Seq(e, es @ _*)) => 
+        Binding.getAll(es).map((e, _, None))
+      case _ => None
+    }
+  }
+
   /** Conversion to Inox expression. */
   def toInoxExpr(expr: Expression): trees.Expr = {
     typeCheck(expr, Unknown.fresh)(Map()) match {
@@ -613,6 +653,69 @@ class ExprIR(val program: InoxProgram) extends IR {
         typeCheck(set2, expected)
       }).addConstraint({
         Constraint.equal(expected, trees.SetType(elementType))
+      })
+    }
+
+    //---- Operations on Bags ----//
+
+    case BagConstruction(bs, otpe) => {
+      val elementType = otpe.getOrElse(Unknown.fresh)
+      val freshs = Seq.fill(bs.length)(Unknown.fresh)
+      val countType = Unknown.fresh
+
+      Constrained.withUnifier({ (unifier: Unifier) =>
+        (es: Seq[(trees.Expr, trees.Expr)]) => trees.FiniteBag(es, unifier(elementType))
+      }).app({
+        Constrained.sequence({
+          bs.zip(freshs).map({
+            case ((k, v), t) => {
+              typeCheck(k, t).combine(typeCheck(v, countType))({
+                (a: trees.Expr, b: trees.Expr) => (a, b)
+              }).addConstraint({
+                Constraint.subtype(t, elementType)
+              })
+            }
+          })
+        })
+      }).addConstraint({
+        Constraint.equal(countType, trees.IntegerType)
+      }).addConstraint({
+        Constraint.equal(expected, trees.BagType(elementType))
+      })
+    }
+
+    //---- Operations on Maps ----//
+
+    case MapConstruction(default, bs, otpes) => {
+      val (keyType, valueType) = otpes.getOrElse((Unknown.fresh, Unknown.fresh))
+      val defaultFresh = Unknown.fresh
+      val freshs = Seq.fill(bs.length)((Unknown.fresh, Unknown.fresh))
+
+      Constrained.withUnifier((unifier: Unifier) => {
+        (t: (trees.Expr, Seq[(trees.Expr, trees.Expr)])) => 
+          trees.FiniteMap(t._2, t._1, unifier(keyType), unifier(valueType))
+      }).app({
+        Constrained.sequence({
+          bs.zip(freshs).map({
+            case ((k, v), (tk, tv)) => {
+              typeCheck(k, tk).combine(typeCheck(v, tv))({
+                (a: trees.Expr, b: trees.Expr) => (a, b)
+              }).addConstraint({
+                Constraint.subtype(tk, keyType)
+              }).addConstraint({
+                Constraint.subtype(tv, valueType)
+              })
+            }
+          })
+        }).combine({
+          typeCheck(default, defaultFresh).addConstraint({
+            Constraint.subtype(defaultFresh, valueType)
+          })
+        })({
+          case (es, e) => (e, es)
+        })
+      }).addConstraint({
+        Constraint.equal(expected, trees.MapType(keyType, valueType))
       })
     }
 

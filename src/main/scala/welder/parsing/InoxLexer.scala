@@ -38,7 +38,9 @@ class InoxLexer(val program: InoxProgram) extends StdLexical with StringContextL
 
     Seq("||", "|") -> LeftAssoc,
 
-    Seq("==>") -> RightAssoc
+    Seq("==>") -> RightAssoc,
+
+    Seq("->") -> RightAssoc
   )
   val operators = (opTable.map(_._1).flatten ++ unaryOps).distinct
 
