@@ -168,10 +168,21 @@ class ExprIR(val program: InoxProgram) extends IR {
     }
   }
 
+  object SetConstruction {
+    def unapply(expr: Expression): Option[(Seq[Expression], Option[Type])] = expr match {
+      case Application(TypeApplication(Literal(Name(bi.BuiltIn(bi.SetConstructor))), Seq(tpe)), es) => 
+        Some((es, Some(tpe)))
+      case Application(Literal(Name(bi.BuiltIn(bi.SetConstructor))), es) => 
+        Some((es, None))
+      case _ => None
+    }
+  }
+
   object SetBinaryOperation {
-    def unapply(expr: Expression): Option[(Expression, Expression, (trees.Expr, trees.Expr) => trees.Expr)] = expr match {
-      case Application(Selection(set1, FieldName(SetBinMethod(f))), Seq(set2)) => Some((set1, set2, f))
-      case Operation(SetBinOp(f), Seq(set1, set2)) => Some((set1, set2, f))
+    def unapply(expr: Expression): Option[(Expression, Expression, (trees.Expr, trees.Expr) => trees.Expr, Option[Type])] = expr match {
+      case Application(TypeApplication(Literal(Name(SetBinFun(f))), Seq(tpe)), Seq(set1, set2)) => Some((set1, set2, f, Some(tpe)))
+      case Application(Literal(Name(SetBinFun(f))), Seq(set1, set2)) => Some((set1, set2, f, None))
+      case Operation(SetBinOp(f), Seq(set1, set2)) => Some((set1, set2, f, None))
       case _ => None
     }
 
@@ -184,28 +195,57 @@ class ExprIR(val program: InoxProgram) extends IR {
       }
     }
 
-    object SetBinMethod {
+    object SetBinFun {
       def unapply(string: String): Option[(trees.Expr, trees.Expr) => trees.Expr] = string match {
-        case "union" => Some({ (lhs: trees.Expr, rhs: trees.Expr) => trees.SetUnion(lhs, rhs) })
-        case "intersection" => Some({ (lhs: trees.Expr, rhs: trees.Expr) => trees.SetIntersection(lhs, rhs) })
-        case "difference" => Some({ (lhs: trees.Expr, rhs: trees.Expr) => trees.SetDifference(lhs, rhs) })
+        case bi.BuiltIn(bi.SetUnion) => 
+          Some({ (lhs: trees.Expr, rhs: trees.Expr) => trees.SetUnion(lhs, rhs) })
+        case bi.BuiltIn(bi.SetIntersection) =>
+          Some({ (lhs: trees.Expr, rhs: trees.Expr) => trees.SetIntersection(lhs, rhs) })
+        case bi.BuiltIn(bi.SetDifference) =>
+          Some({ (lhs: trees.Expr, rhs: trees.Expr) => trees.SetDifference(lhs, rhs) })
         case _ => None
       }
     }
   }
 
   object SubsetOperation {
-    def unapply(expr: Expression): Option[(Expression, Expression)] = expr match {
-      case Application(Selection(set1, FieldName("subsetOf")), Seq(set2)) => Some((set1, set2))
-      case Operation("⊆", Seq(set1, set2)) => Some((set1, set2))
+    def unapply(expr: Expression): Option[(Expression, Expression, Option[Type])] = expr match {
+      case Application(TypeApplication(Literal(Name(bi.BuiltIn(bi.SetSubset))), Seq(tpe)), Seq(set1, set2)) =>
+        Some((set1, set2, Some(tpe)))
+      case Application(Literal(Name(bi.BuiltIn(bi.SetSubset))), Seq(set1, set2)) =>
+        Some((set1, set2, None))
+      case Operation("⊆", Seq(set1, set2)) =>
+        Some((set1, set2, None))
       case _ => None
     }
   }
 
   object ContainsOperation {
+    def unapply(expr: Expression): Option[(Expression, Expression, Option[Type])] = expr match {
+      case Application(TypeApplication(Literal(Name(bi.BuiltIn(bi.SetContains))), Seq(tpe)), Seq(set, elem)) =>
+        Some((set, elem, Some(tpe)))
+      case Application(Literal(Name(bi.BuiltIn(bi.SetContains))), Seq(set, elem)) =>
+        Some((set, elem, None))
+      case Operation("∈", Seq(elem, set)) =>
+        Some((set, elem, None))
+      case _ => None
+    }
+  }
+
+  object ConcatenateOperation {
     def unapply(expr: Expression): Option[(Expression, Expression)] = expr match {
-      case Application(Selection(set, FieldName("contains")), Seq(elem)) => Some((set, elem))
-      case Operation("∈", Seq(elem, set)) => Some((set, elem))
+      case Application(Literal(Name(bi.BuiltIn(bi.StringConcatenate))), Seq(str1, str2)) =>
+        Some((str1, str2))
+      case Operation("++", Seq(str1, str2)) =>
+        Some((str1, str2))
+      case _ => None
+    }
+  }
+
+  object SubstringOperation {
+    def unapply(expr: Expression): Option[(Expression, Expression, Expression)] = expr match {
+      case Application(Literal(Name(bi.BuiltIn(bi.StringSubstring))), Seq(str, start, end)) =>
+        Some((str, start, end))
       case _ => None
     }
   }
@@ -480,11 +520,39 @@ class ExprIR(val program: InoxProgram) extends IR {
       })
     }
 
+    //---- Operations on Strings ----//
+
+    case ConcatenateOperation(str1, str2) => {
+      Constrained.sequence({
+        Seq(str1, str2).map(typeCheck(_, expected))
+      }).map({
+        case Seq(s1, s2) => trees.StringConcat(s1, s2)
+      }).addConstraint({
+        Constraint.equal(expected, trees.StringType)
+      })
+    }
+
+    case SubstringOperation(str, start, end) => {
+      val indexExpected = Unknown.fresh
+
+      Constrained.sequence(Seq(
+        typeCheck(str, expected),
+        typeCheck(start, indexExpected),
+        typeCheck(end, indexExpected)
+      )).map({
+        case Seq(s, a, b) => trees.SubString(s, a, b)
+      }).addConstraint({
+        Constraint.equal(expected, trees.StringType)
+      }).addConstraint({
+        Constraint.equal(indexExpected, trees.IntegerType)
+      })
+    }
+
     //---- Operations on Set ----//
 
     // Call to the Set constructor.
-    case Application(Variable(IdentifierName("Set")), es) => {
-      val upper = Unknown.fresh
+    case SetConstruction(es, otpe) => {
+      val upper = otpe.getOrElse(Unknown.fresh)
       val lowers = Seq.fill(es.length) { Unknown.fresh }
 
       Constrained.withUnifier({ (unifier: Unifier) => 
@@ -501,25 +569,28 @@ class ExprIR(val program: InoxProgram) extends IR {
     }
 
     // Call to contains.
-    case ContainsOperation(set, elem) => {
+    case ContainsOperation(set, elem, otpe) => {
       val setType = Unknown.fresh
-      val elementType = Unknown.fresh
+      val elementExpected = Unknown.fresh
+      val elementType = otpe.getOrElse(Unknown.fresh)
 
       typeCheck(set, setType).map({ (s: trees.Expr) => 
         (e: trees.Expr) => trees.ElementOfSet(e, s)
       }).app({
-        typeCheck(elem, elementType)
+        typeCheck(elem, elementExpected)
       }).addConstraint({
         Constraint.equal(expected, trees.BooleanType)
       }).addConstraint({
         Constraint.equal(setType, trees.SetType(elementType))
+      }).addConstraint({
+        Constraint.subtype(elementExpected, elementType)
       })
     }
 
     // Call to subset.
-    case SubsetOperation(set1, set2) => {
+    case SubsetOperation(set1, set2, otpe) => {
       val setType = Unknown.fresh
-      val elementType = Unknown.fresh
+      val elementType = otpe.getOrElse(Unknown.fresh)
 
       typeCheck(set1, setType).map({ (s1: trees.Expr) => 
         (s2: trees.Expr) => trees.SubsetOf(s1, s2)
@@ -533,8 +604,8 @@ class ExprIR(val program: InoxProgram) extends IR {
     }
 
     // Binary operations on set that return sets.
-    case SetBinaryOperation(set1, set2, f) => {
-      val elementType = Unknown.fresh
+    case SetBinaryOperation(set1, set2, f, otpe) => {
+      val elementType = otpe.getOrElse(Unknown.fresh)
 
       typeCheck(set1, expected).map({ (s1: trees.Expr) => 
         (s2: trees.Expr) => f(s1, s2)

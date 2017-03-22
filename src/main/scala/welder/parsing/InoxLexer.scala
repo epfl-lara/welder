@@ -22,6 +22,8 @@ class InoxLexer(val program: InoxProgram) extends StdLexical with StringContextL
 
     Seq("+", "-") -> LeftAssoc,
 
+    Seq("++") -> LeftAssoc,
+
     Seq("∪", "∩", "∖") -> LeftAssoc,
 
     Seq("⊆", "∈") -> LeftAssoc,
