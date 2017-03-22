@@ -290,6 +290,16 @@ class ExprIR(val program: InoxProgram) extends IR {
     }
   }
 
+  object MapApplyOperation {
+    def unapply(expr: Expression): Option[(Expression, Expression, Option[(Type, Type)])] = expr match {
+      case Application(TypeApplication(Literal(Name(bi.BuiltIn(bi.MapApply))), Seq(tpe1, tpe2)), Seq(map, elem)) =>
+        Some((map, elem, Some((tpe1, tpe2))))
+      case Application(Literal(Name(bi.BuiltIn(bi.MapApply))), Seq(map, elem)) =>
+        Some((map, elem, None))
+      case _ => None
+    }
+  }
+
   /** Conversion to Inox expression. */
   def toInoxExpr(expr: Expression): trees.Expr = {
     typeCheck(expr, Unknown.fresh)(Map()) match {
@@ -716,6 +726,22 @@ class ExprIR(val program: InoxProgram) extends IR {
         })
       }).addConstraint({
         Constraint.equal(expected, trees.MapType(keyType, valueType))
+      })
+    }
+
+    case MapApplyOperation(map, key, otpes) => {
+      val (keyType, valueType) = otpes.getOrElse((Unknown.fresh, Unknown.fresh))
+      val keyExpected = Unknown.fresh
+      val mapExpected = Unknown.fresh
+
+      typeCheck(map, mapExpected).combine(typeCheck(key, keyExpected))({
+        case (m, k) => trees.MapApply(m, k)
+      }).addConstraint({
+        Constraint.subtype(keyExpected, keyType)
+      }).addConstraint({
+        Constraint.equal(expected, valueType)
+      }).addConstraint({
+        Constraint.equal(mapExpected, trees.MapType(keyType, valueType))
       })
     }
 
