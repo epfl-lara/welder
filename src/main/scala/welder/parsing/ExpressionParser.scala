@@ -24,7 +24,7 @@ class ExpressionParser(program: InoxProgram) extends TypeParser(program) { self 
   lazy val selectableExpr: Parser[Expression] = withApplication {
     invocationExpr | literalExpr | variableExpr | tupleOrParensExpr
   }
-  
+
   def withApplication(exprParser: Parser[Expression]): Parser[Expression] =
     for {
       expr <- exprParser
@@ -133,7 +133,8 @@ class ExpressionParser(program: InoxProgram) extends TypeParser(program) { self 
 
   val symbolTable = fdTable ++ cstrTable
 
-  lazy val symbol: Parser[Expression] = acceptMatch("Function expected.", {
+  lazy val symbol: Parser[Expression] = acceptMatch("Symbol expected.", {
+    case lexical.Identifier(name) if eir.bi.names.contains(name) => Literal(Name(name))
     case lexical.Identifier(name) if symbolTable.map(_.name).contains(name) => Literal(Name(name))
     case RawIdentifier(i) if symbolTable.contains(i) => Literal(EmbeddedIdentifier(i))
   })

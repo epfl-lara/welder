@@ -9,6 +9,8 @@ class ExprIR(val program: InoxProgram) extends IR {
   import program.trees
   import program.symbols
 
+  val bi = new DefaultBuiltIns {}
+
   val solver = new SimpleConstraintSolver(program)
   import solver.constraints._
 
