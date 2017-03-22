@@ -300,6 +300,20 @@ class ExprIR(val program: InoxProgram) extends IR {
     }
   }
 
+  object MapUpdatedOperation {
+    def unapply(expr: Expression): Option[(Expression, Expression, Expression, Option[(Type, Type)])] = expr match {
+      case Application(TypeApplication(Literal(Name(bi.BuiltIn(bi.MapUpdated))), Seq(tpe1, tpe2)), Seq(map, key, value)) =>
+        Some((map, key, value, Some((tpe1, tpe2))))
+      case Application(TypeApplication(Literal(Name(bi.BuiltIn(bi.MapUpdated))), Seq(tpe1, tpe2)), Seq(map, Binding(key, value))) =>
+        Some((map, key, value, Some((tpe1, tpe2))))
+      case Application(Literal(Name(bi.BuiltIn(bi.MapUpdated))), Seq(map, key, value)) =>
+        Some((map, key, value, None))
+      case Application(Literal(Name(bi.BuiltIn(bi.MapUpdated))), Seq(map, Binding(key, value))) =>
+        Some((map, key, value, None))
+      case _ => None
+    }
+  }
+
   /** Conversion to Inox expression. */
   def toInoxExpr(expr: Expression): trees.Expr = {
     typeCheck(expr, Unknown.fresh)(Map()) match {
@@ -742,6 +756,26 @@ class ExprIR(val program: InoxProgram) extends IR {
         Constraint.equal(expected, valueType)
       }).addConstraint({
         Constraint.equal(mapExpected, trees.MapType(keyType, valueType))
+      })
+    }
+
+    case MapUpdatedOperation(map, key, value, otpes) => {
+      val (keyType, valueType) = otpes.getOrElse((Unknown.fresh, Unknown.fresh))
+      val keyExpected = Unknown.fresh
+      val valueExpected = Unknown.fresh
+
+      Constrained.sequence(Seq(
+        typeCheck(map, expected),
+        typeCheck(key, keyExpected),
+        typeCheck(value, valueExpected)
+      )).map({
+        case Seq(m, k, v) => trees.MapUpdated(m, k, v)
+      }).addConstraint({
+        Constraint.equal(expected, trees.MapType(keyType, valueType))
+      }).addConstraint({
+        Constraint.subtype(keyExpected, keyType)
+      }).addConstraint({
+        Constraint.subtype(valueExpected, valueType)
       })
     }
 
