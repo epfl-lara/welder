@@ -56,12 +56,12 @@ class InoxLexer(val program: InoxProgram) extends StdLexical with StringContextL
 
   val keywords = acceptSeq("=>") ^^^ Keyword("=>") |
                  ('.' <~ not(whitespaceChar)) ^^^ Keyword(".") |
-                 acceptSeq("true") <~ not(digit | letter) ^^^ Keyword("true") |
-                 acceptSeq("false") <~ not(digit | letter) ^^^ Keyword("false") |
-                 acceptSeq("if") <~ not(digit | letter) ^^^ Keyword("if") |
-                 acceptSeq("else") <~ not(digit | letter) ^^^ Keyword("else") |
-                 acceptSeq("let") <~ not(digit | letter) ^^^ Keyword("let") |
-                 acceptSeq("in") <~ not(digit | letter) ^^^ Keyword("in") |
+                 acceptSeq("true") <~ not(identChar) ^^^ Keyword("true") |
+                 acceptSeq("false") <~ not(identChar) ^^^ Keyword("false") |
+                 acceptSeq("if") <~ not(identChar) ^^^ Keyword("if") |
+                 acceptSeq("else") <~ not(identChar) ^^^ Keyword("else") |
+                 acceptSeq("let") <~ not(identChar) ^^^ Keyword("let") |
+                 acceptSeq("in") <~ not(identChar) ^^^ Keyword("in") |
                  acceptSeq("=") ^^^ Keyword("=")
 
   val comma: Parser[Token] = ',' ^^^ Punctuation(',')
