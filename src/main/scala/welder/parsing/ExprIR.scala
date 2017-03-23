@@ -280,6 +280,36 @@ class ExprIR(val program: InoxProgram) extends IR {
     }
   }
 
+  object BagMultiplicityOperation {
+    def unapply(expr: Expression): Option[(Expression, Expression, Option[Type])] = expr match {
+      case Application(TypeApplication(Literal(Name(bi.BuiltIn(bi.BagMultiplicity))), Seq(tpe)), Seq(m, k)) => 
+        Some((m, k, Some(tpe)))
+      case Application(Literal(Name(bi.BuiltIn(bi.BagMultiplicity))), Seq(m, k)) => 
+        Some((m, k, None))
+      case _ => None
+    }
+  }
+
+  object BagBinaryOperation {
+
+    def unapply(expr: Expression): Option[(Expression, Expression, (trees.Expr, trees.Expr) => trees.Expr, Option[Type])] = expr match {
+      case Application(TypeApplication(Literal(Name(BagBinFun(f))), Seq(tpe)), Seq(map1, map2)) =>
+        Some((map1, map2, f, Some(tpe)))
+      case Application(Literal(Name(BagBinFun(f))), Seq(map1, map2)) =>
+        Some((map1, map2, f, None))
+      case _ => None
+    }
+
+    object BagBinFun {
+      def unapply(string: String): Option[(trees.Expr, trees.Expr) => trees.Expr] = string match {
+        case bi.BuiltIn(bi.BagUnion) => Some((map1: trees.Expr, map2: trees.Expr) => trees.BagUnion(map1, map2))
+        case bi.BuiltIn(bi.BagIntersection) => Some((map1: trees.Expr, map2: trees.Expr) => trees.BagIntersection(map1, map2))
+        case bi.BuiltIn(bi.BagDifference) => Some((map1: trees.Expr, map2: trees.Expr) => trees.BagDifference(map1, map2))
+        case _ => None
+      }
+    }
+  }
+
   object MapConstruction {
     def unapply(expr: Expression): Option[(Expression, Seq[(Expression, Expression)], Option[(Type, Type)])] = expr match {
       case Application(TypeApplication(Literal(Name(bi.BuiltIn(bi.MapConstructor))), Seq(tpe1, tpe2)), Seq(e, es @ _*)) => 
@@ -705,6 +735,33 @@ class ExprIR(val program: InoxProgram) extends IR {
         Constraint.equal(countType, trees.IntegerType)
       }).addConstraint({
         Constraint.equal(expected, trees.BagType(elementType))
+      })
+    }
+
+    case BagMultiplicityOperation(map, key, otpe) => {
+      val elementType = otpe.getOrElse(Unknown.fresh)
+      val keyExpected = Unknown.fresh
+      val mapExpected = Unknown.fresh
+
+      typeCheck(map, mapExpected).combine(typeCheck(key, keyExpected))({
+        case (m, k) => trees.MultiplicityInBag(k, m)
+      }).addConstraint({
+        Constraint.equal(expected, trees.IntegerType)
+      }).addConstraint({
+        Constraint.subtype(keyExpected, elementType)
+      }).addConstraint({
+        Constraint.equal(mapExpected, trees.BagType(elementType))
+      })
+    }
+
+    case BagBinaryOperation(map1, map2, op, otpe) => {
+      val elementType = otpe.getOrElse(Unknown.fresh)
+      val mapExpected = Unknown.fresh
+
+      typeCheck(map1, mapExpected).combine(typeCheck(map2, mapExpected))({
+        case (m1, m2) => op(m1, m2)
+      }).addConstraint({
+        Constraint.equal(mapExpected, trees.BagType(elementType))
       })
     }
 
