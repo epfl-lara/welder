@@ -136,7 +136,8 @@ class ExpressionParser(program: InoxProgram) extends TypeParser(program) { self 
     (p('(') ~> expression <~ p(')'))
 
   lazy val tupleOrParensExpr: Parser[Expression] =
-    p('(') ~> rep1sep(expression, p(',')) <~ p(')') ^^ {
+    p('(') ~> repsep(expression, p(',')) <~ p(')') ^^ {
+      case Seq() => Literal(UnitLiteral)
       case Seq(e) => e
       case es => Operation("Tuple", es)
     }
