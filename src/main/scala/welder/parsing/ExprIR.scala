@@ -234,6 +234,16 @@ class ExprIR(val program: InoxProgram) extends IR {
     }
   }
 
+  object SetAddOperation {
+    def unapply(expr: Expression): Option[(Expression, Expression, Option[Type])] = expr match {
+      case Application(TypeApplication(Literal(Name(bi.BuiltIn(bi.SetAdd))), Seq(tpe)), Seq(set, elem)) =>
+        Some((set, elem, Some(tpe)))
+      case Application(Literal(Name(bi.BuiltIn(bi.SetAdd))), Seq(set, elem)) =>
+        Some((set, elem, None))
+      case _ => None
+    }
+  }
+
   object ConcatenateOperation {
     def unapply(expr: Expression): Option[(Expression, Expression)] = expr match {
       case Application(Literal(Name(bi.BuiltIn(bi.StringConcatenate))), Seq(str1, str2)) =>
@@ -290,6 +300,16 @@ class ExprIR(val program: InoxProgram) extends IR {
         Some((m, k, Some(tpe)))
       case Application(Literal(Name(bi.BuiltIn(bi.BagMultiplicity))), Seq(m, k)) => 
         Some((m, k, None))
+      case _ => None
+    }
+  }
+
+  object BagAddOperation {
+    def unapply(expr: Expression): Option[(Expression, Expression, Option[Type])] = expr match {
+      case Application(TypeApplication(Literal(Name(bi.BuiltIn(bi.BagAdd))), Seq(tpe)), Seq(bag, elem)) =>
+        Some((bag, elem, Some(tpe)))
+      case Application(Literal(Name(bi.BuiltIn(bi.BagAdd))), Seq(bag, elem)) =>
+        Some((bag, elem, None))
       case _ => None
     }
   }
@@ -624,6 +644,7 @@ class ExprIR(val program: InoxProgram) extends IR {
 
     //---- Operations on Strings ----//
 
+    // String concatenation.
     case ConcatenateOperation(str1, str2) => {
       Constrained.sequence({
         Seq(str1, str2).map(typeCheck(_, expected))
@@ -634,6 +655,7 @@ class ExprIR(val program: InoxProgram) extends IR {
       })
     }
 
+    // Substring.
     case SubstringOperation(str, start, end) => {
       val indexExpected = Unknown.fresh
 
@@ -647,6 +669,18 @@ class ExprIR(val program: InoxProgram) extends IR {
         Constraint.equal(expected, trees.StringType)
       }).addConstraint({
         Constraint.equal(indexExpected, trees.IntegerType)
+      })
+    }
+
+    // String length.
+    case Application(Literal(Name(bi.BuiltIn(bi.StringLength))), Seq(s)) => {
+      val stringExpected = Unknown.fresh
+      typeCheck(s, stringExpected).map({
+        case e => trees.StringLength(e) 
+      }).addConstraint({
+        Constraint.equal(stringExpected, trees.StringType)
+      }).addConstraint({
+        Constraint.equal(expected, trees.IntegerType)
       })
     }
 
@@ -702,6 +736,22 @@ class ExprIR(val program: InoxProgram) extends IR {
         case (m1, m2) => op(m1, m2)
       }).addConstraint({
         Constraint.equal(mapExpected, trees.BagType(elementType))
+      })
+    }
+
+    // Bag add operation.
+    case BagAddOperation(bag, elem, otpe) => {
+      val elementExpected = Unknown.fresh
+      val elementType = otpe.getOrElse(Unknown.fresh)
+
+      typeCheck(bag, expected).map({ (b: trees.Expr) => 
+        (e: trees.Expr) => trees.BagAdd(b, e)
+      }).app({
+        typeCheck(elem, elementExpected)
+      }).addConstraint({
+        Constraint.equal(expected, trees.BagType(elementType))
+      }).addConstraint({
+        Constraint.subtype(elementExpected, elementType)
       })
     }
 
@@ -842,6 +892,22 @@ class ExprIR(val program: InoxProgram) extends IR {
         typeCheck(set2, expected)
       }).addConstraint({
         Constraint.equal(expected, trees.SetType(elementType))
+      })
+    }
+
+    // Set add operation.
+    case SetAddOperation(set, elem, otpe) => {
+      val elementExpected = Unknown.fresh
+      val elementType = otpe.getOrElse(Unknown.fresh)
+
+      typeCheck(set, expected).map({ (s: trees.Expr) => 
+        (e: trees.Expr) => trees.SetAdd(s, e)
+      }).app({
+        typeCheck(elem, elementExpected)
+      }).addConstraint({
+        Constraint.equal(expected, trees.SetType(elementType))
+      }).addConstraint({
+        Constraint.subtype(elementExpected, elementType)
       })
     }
 
