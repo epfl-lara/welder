@@ -19,10 +19,20 @@ class ExpressionParser(program: InoxProgram) extends TypeParser(program) { self 
   import eir.program.trees
 
   lazy val expression: Parser[Expression] = (greedyRight | operatorExpr) withFailureMessage "Expression expected."
-  lazy val nonOperatorExpr: Parser[Expression] = withPrefix(greedyRight | selectionExpr)
+  lazy val nonOperatorExpr: Parser[Expression] = withPrefix(greedyRight | withTypeAnnotation(selectionExpr))
 
   lazy val selectableExpr: Parser[Expression] = withApplication {
     invocationExpr | literalExpr | variableExpr | literalSetLikeExpr | tupleOrParensExpr
+  }
+
+  def withTypeAnnotation(exprParser: Parser[Expression]): Parser[Expression] = {
+    for {
+      e <- exprParser
+      ot <- opt(p(':') ~> inoxType)
+    } yield ot match {
+      case None => e
+      case Some(t) => TypeApplication(Operation("TypeAnnotation", Seq(e)), Seq(t))
+    }
   }
 
   def withApplication(exprParser: Parser[Expression]): Parser[Expression] =

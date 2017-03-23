@@ -1165,6 +1165,17 @@ class ExprIR(val program: InoxProgram) extends IR {
 
     //---- Type Casting ----//
 
+    // Annotation.
+    case TypeApplication(Operation("TypeAnnotation", Seq(expr)), Seq(tpe)) => {
+      val sub = Unknown.fresh
+
+      typeCheck(expr, sub).addConstraint({
+        Constraint.equal(expected, tpe)
+      }).addConstraint({
+        Constraint.subtype(sub, tpe)
+      })
+    }
+
     // Casting.
     case TypeApplication(Selection(expr, FieldName("asInstanceOf")), Seq(tpe)) => {
       val sup = Unknown.fresh
@@ -1198,16 +1209,6 @@ class ExprIR(val program: InoxProgram) extends IR {
       }).addConstraint({
         // ... and a super type of the type of the expression being checked. 
         Constraint.subtype(sub, sup)
-      })
-    }
-
-    // Type Annotation.
-    case TypeApplication(Selection(expr, FieldName("as")), Seq(tpe)) => {
-      val sub = Unknown.fresh
-      typeCheck(expr, sub).addConstraint({
-        Constraint.equal(tpe, expected)
-      }).addConstraint({
-        Constraint.subtype(sub, expected)
       })
     }
 
