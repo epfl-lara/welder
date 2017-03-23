@@ -89,7 +89,14 @@ class ExpressionParser(program: InoxProgram) extends TypeParser(program) { self 
     case RawIdentifier(i) => FieldIdentifier(i)
   })
 
-  lazy val greedyRight: Parser[Expression] = quantifierExpr | ifExpr | letExpr
+  lazy val greedyRight: Parser[Expression] = quantifierExpr | ifExpr | letExpr | assumeExpr
+
+  lazy val assumeExpr: Parser[Expression] = for {
+    _ <- kw("assume")
+    p <- expression
+    _ <- kw("in")
+    e <- expression
+  } yield Operation("Assume", Seq(p, e))
 
   lazy val ifExpr: Parser[Expression] = for {
     _ <- kw("if")

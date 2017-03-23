@@ -777,7 +777,7 @@ class ExprIR(val program: InoxProgram) extends IR {
       })
     }
 
-        //---- Operations on Set ----//
+    //---- Operations on Set ----//
 
     // Call to the Set constructor.
     case SetConstruction(es, otpe) => {
@@ -860,6 +860,16 @@ class ExprIR(val program: InoxProgram) extends IR {
         case Seq(condExpr, thennExpr, elzeExpr) => trees.IfExpr(condExpr, thennExpr, elzeExpr)
       }).addConstraint({
         Constraint.equal(expectedCond, trees.BooleanType)
+      })
+    }
+
+    // Assumptions
+    case Operation("Assume", Seq(p, e)) => {
+      val booleanExpected = Unknown.fresh
+      typeCheck(p, booleanExpected).combine(typeCheck(e, expected))({
+        case (pred, body) => trees.Assume(pred, body)
+      }).addConstraint({
+        Constraint.equal(booleanExpected, trees.BooleanType)
       })
     }
 
