@@ -22,7 +22,7 @@ class ExpressionParser(program: InoxProgram) extends TypeParser(program) { self 
   lazy val nonOperatorExpr: Parser[Expression] = withPrefix(greedyRight | selectionExpr)
 
   lazy val selectableExpr: Parser[Expression] = withApplication {
-    invocationExpr | literalExpr | variableExpr | tupleOrParensExpr
+    invocationExpr | literalExpr | variableExpr | literalSetLikeExpr | tupleOrParensExpr
   }
 
   def withApplication(exprParser: Parser[Expression]): Parser[Expression] =
@@ -116,14 +116,55 @@ class ExpressionParser(program: InoxProgram) extends TypeParser(program) { self 
   })
 
   lazy val parensExpr: Parser[Expression] = 
-    (p('(') ~> expression <~ p(')')) |
-    (p('{') ~> expression <~ p('}'))
+    (p('(') ~> expression <~ p(')'))
 
   lazy val tupleOrParensExpr: Parser[Expression] =
     p('(') ~> rep1sep(expression, p(',')) <~ p(')') ^^ {
       case Seq(e) => e
       case es => Operation("Tuple", es)
     }
+
+  def repsepOnce[A, B](parser: Parser[A], sep: Parser[Any], once: Parser[B]): Parser[(Option[B], Seq[A])] = {
+    opt(rep1sepOnce(parser, sep, once)) ^^ {
+      case None => (None, Seq())
+      case Some(t) => t
+    }
+  }
+
+  def rep1sepOnce[A, B](parser: Parser[A], sep: Parser[Any], once: Parser[B]): Parser[(Option[B], Seq[A])] =
+    { 
+      for {
+        a <- parser
+        o <- opt(sep ~> rep1sepOnce(parser, sep, once))
+      } yield o match {
+        case None => (None, Seq(a))
+        case Some((ob, as)) => (ob, a +: as)
+      }
+    } | {
+      for {
+        b <- once
+        o <- opt(sep ~> rep1sep(parser, sep))
+      } yield o match {
+        case None => (Some(b), Seq())
+        case Some(as) => (Some(b), as)
+      }
+    }
+
+
+  lazy val literalSetLikeExpr: Parser[Expression] =
+    p('{') ~> repsepOnce(expression, p(','), defaultMap) <~ p('}') ^^ {
+      case (None, as) => Operation("Set", as)
+      case (Some((d, None)), as) => Operation("Map", d +: as)
+      case (Some((d, Some(t))), as) => TypeApplication(Operation("Map", d +: as), Seq(t))
+    }
+
+  lazy val defaultMap: Parser[(Expression, Option[Type])] =
+    for {
+      _ <- elem(Operator("*"))
+      ot <- opt(p(':') ~> inoxType)
+      _ <- elem(Operator("->"))
+      e <- expression
+    } yield (e, ot)
 
   lazy val fdTable = symbols.functions.keys.toSet
 

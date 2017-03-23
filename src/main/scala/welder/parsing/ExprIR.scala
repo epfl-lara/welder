@@ -174,6 +174,8 @@ class ExprIR(val program: InoxProgram) extends IR {
         Some((es, Some(tpe)))
       case Application(Literal(Name(bi.BuiltIn(bi.SetConstructor))), es) => 
         Some((es, None))
+      case Operation("Set", es) => 
+        Some((es, None))
       case _ => None
     }
   }
@@ -276,6 +278,8 @@ class ExprIR(val program: InoxProgram) extends IR {
         Binding.getAll(es).map((_, Some(tpe)))
       case Application(Literal(Name(bi.BuiltIn(bi.BagConstructor))), es) => 
         Binding.getAll(es).map((_, None))
+      case Operation("Set", es) => 
+        Binding.getAll(es).map((_, None))
       case _ => None
     }
   }
@@ -311,11 +315,15 @@ class ExprIR(val program: InoxProgram) extends IR {
   }
 
   object MapConstruction {
-    def unapply(expr: Expression): Option[(Expression, Seq[(Expression, Expression)], Option[(Type, Type)])] = expr match {
+    def unapply(expr: Expression): Option[(Expression, Seq[(Expression, Expression)], Option[Type], Option[Type])] = expr match {
       case Application(TypeApplication(Literal(Name(bi.BuiltIn(bi.MapConstructor))), Seq(tpe1, tpe2)), Seq(e, es @ _*)) => 
-        Binding.getAll(es).map((e, _, Some((tpe1, tpe2))))
+        Binding.getAll(es).map((e, _, Some(tpe1), Some(tpe2)))
       case Application(Literal(Name(bi.BuiltIn(bi.MapConstructor))), Seq(e, es @ _*)) => 
-        Binding.getAll(es).map((e, _, None))
+        Binding.getAll(es).map((e, _, None, None))
+      case TypeApplication(Operation("Map", Seq(e, es @ _*)), Seq(t)) => 
+        Binding.getAll(es).map((e, _, Some(t), None))
+      case Operation("Map", Seq(e, es @ _*)) => 
+        Binding.getAll(es).map((e, _, None, None))
       case _ => None
     }
   }
@@ -642,74 +650,6 @@ class ExprIR(val program: InoxProgram) extends IR {
       })
     }
 
-    //---- Operations on Set ----//
-
-    // Call to the Set constructor.
-    case SetConstruction(es, otpe) => {
-      val upper = otpe.getOrElse(Unknown.fresh)
-      val lowers = Seq.fill(es.length) { Unknown.fresh }
-
-      Constrained.withUnifier({ (unifier: Unifier) => 
-        (elems: Seq[trees.Expr]) => trees.FiniteSet(elems, unifier(upper))
-      }).app({
-        Constrained.sequence(es.zip(lowers).map{
-          case (e, lower) => typeCheck(e, lower).addConstraint({
-            Constraint.subtype(lower, upper)
-          })
-        })
-      }).addConstraint({
-        Constraint.equal(expected, trees.SetType(upper))
-      })
-    }
-
-    // Call to contains.
-    case ContainsOperation(set, elem, otpe) => {
-      val setType = Unknown.fresh
-      val elementExpected = Unknown.fresh
-      val elementType = otpe.getOrElse(Unknown.fresh)
-
-      typeCheck(set, setType).map({ (s: trees.Expr) => 
-        (e: trees.Expr) => trees.ElementOfSet(e, s)
-      }).app({
-        typeCheck(elem, elementExpected)
-      }).addConstraint({
-        Constraint.equal(expected, trees.BooleanType)
-      }).addConstraint({
-        Constraint.equal(setType, trees.SetType(elementType))
-      }).addConstraint({
-        Constraint.subtype(elementExpected, elementType)
-      })
-    }
-
-    // Call to subset.
-    case SubsetOperation(set1, set2, otpe) => {
-      val setType = Unknown.fresh
-      val elementType = otpe.getOrElse(Unknown.fresh)
-
-      typeCheck(set1, setType).map({ (s1: trees.Expr) => 
-        (s2: trees.Expr) => trees.SubsetOf(s1, s2)
-      }).app({
-        typeCheck(set2, setType)
-      }).addConstraint({
-        Constraint.equal(expected, trees.BooleanType)
-      }).addConstraint({
-        Constraint.equal(setType, trees.SetType(elementType))
-      })
-    }
-
-    // Binary operations on set that return sets.
-    case SetBinaryOperation(set1, set2, f, otpe) => {
-      val elementType = otpe.getOrElse(Unknown.fresh)
-
-      typeCheck(set1, expected).map({ (s1: trees.Expr) => 
-        (s2: trees.Expr) => f(s1, s2)
-      }).app({
-        typeCheck(set2, expected)
-      }).addConstraint({
-        Constraint.equal(expected, trees.SetType(elementType))
-      })
-    }
-
     //---- Operations on Bags ----//
 
     case BagConstruction(bs, otpe) => {
@@ -767,8 +707,9 @@ class ExprIR(val program: InoxProgram) extends IR {
 
     //---- Operations on Maps ----//
 
-    case MapConstruction(default, bs, otpes) => {
-      val (keyType, valueType) = otpes.getOrElse((Unknown.fresh, Unknown.fresh))
+    case MapConstruction(default, bs, oKeyType, oValueType) => {
+      val keyType = oKeyType.getOrElse(Unknown.fresh)
+      val valueType = oValueType.getOrElse(Unknown.fresh)
       val defaultFresh = Unknown.fresh
       val freshs = Seq.fill(bs.length)((Unknown.fresh, Unknown.fresh))
 
@@ -833,6 +774,74 @@ class ExprIR(val program: InoxProgram) extends IR {
         Constraint.subtype(keyExpected, keyType)
       }).addConstraint({
         Constraint.subtype(valueExpected, valueType)
+      })
+    }
+
+        //---- Operations on Set ----//
+
+    // Call to the Set constructor.
+    case SetConstruction(es, otpe) => {
+      val upper = otpe.getOrElse(Unknown.fresh)
+      val lowers = Seq.fill(es.length) { Unknown.fresh }
+
+      Constrained.withUnifier({ (unifier: Unifier) => 
+        (elems: Seq[trees.Expr]) => trees.FiniteSet(elems, unifier(upper))
+      }).app({
+        Constrained.sequence(es.zip(lowers).map{
+          case (e, lower) => typeCheck(e, lower).addConstraint({
+            Constraint.subtype(lower, upper)
+          })
+        })
+      }).addConstraint({
+        Constraint.equal(expected, trees.SetType(upper))
+      })
+    }
+
+    // Call to contains.
+    case ContainsOperation(set, elem, otpe) => {
+      val setType = Unknown.fresh
+      val elementExpected = Unknown.fresh
+      val elementType = otpe.getOrElse(Unknown.fresh)
+
+      typeCheck(set, setType).map({ (s: trees.Expr) => 
+        (e: trees.Expr) => trees.ElementOfSet(e, s)
+      }).app({
+        typeCheck(elem, elementExpected)
+      }).addConstraint({
+        Constraint.equal(expected, trees.BooleanType)
+      }).addConstraint({
+        Constraint.equal(setType, trees.SetType(elementType))
+      }).addConstraint({
+        Constraint.subtype(elementExpected, elementType)
+      })
+    }
+
+    // Call to subset.
+    case SubsetOperation(set1, set2, otpe) => {
+      val setType = Unknown.fresh
+      val elementType = otpe.getOrElse(Unknown.fresh)
+
+      typeCheck(set1, setType).map({ (s1: trees.Expr) => 
+        (s2: trees.Expr) => trees.SubsetOf(s1, s2)
+      }).app({
+        typeCheck(set2, setType)
+      }).addConstraint({
+        Constraint.equal(expected, trees.BooleanType)
+      }).addConstraint({
+        Constraint.equal(setType, trees.SetType(elementType))
+      })
+    }
+
+    // Binary operations on set that return sets.
+    case SetBinaryOperation(set1, set2, f, otpe) => {
+      val elementType = otpe.getOrElse(Unknown.fresh)
+
+      typeCheck(set1, expected).map({ (s1: trees.Expr) => 
+        (s2: trees.Expr) => f(s1, s2)
+      }).app({
+        typeCheck(set2, expected)
+      }).addConstraint({
+        Constraint.equal(expected, trees.SetType(elementType))
       })
     }
 
