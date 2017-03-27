@@ -33,7 +33,11 @@ class TypeParser(val program: InoxProgram) extends StdTokenParsers with Position
     (p: Position) => withPos("Expected keyword: " + s, p)
   }
 
-  lazy val typeExpression: Parser[Expression] = positioned(rep1sep(betweenArrows, kw("=>")) ^^ {
+  lazy val arrow = kw("=>") withFailureMessage {
+    (p: Position) => withPos("Unexpected character. Arrow `=>` or end of type expected.", p)
+  }
+
+  lazy val typeExpression: Parser[Expression] = positioned(rep1sep(betweenArrows, arrow) ^^ {
     case tss => tss.reverse match {
       case returnTypes :: rest => {
         val retType = returnTypes match {
@@ -44,7 +48,9 @@ class TypeParser(val program: InoxProgram) extends StdTokenParsers with Position
       }
       case Nil => program.ctx.reporter.fatalError("Empty list of types.")  // Should never happen.
     }
-  }).withFailureMessage((p: Position) => withPos("Type expected.", p))
+  }) withFailureMessage {
+    (p: Position) => withPos("Type expected.", p)
+  }
 
   lazy val betweenArrows: Parser[List[Expression]] = (argumentTypes | uniqueType) withFailureMessage {
     (p: Position) => withPos("Expected type or group of types.", p)
@@ -54,8 +60,12 @@ class TypeParser(val program: InoxProgram) extends StdTokenParsers with Position
     case t => List(t)
   }
 
+  def endOfGroup(c: Char) = p(c) withFailureMessage {
+    (p: Position) => withPos("Expected character `" + c + "`, or more types (separated by `,`).", p)
+  }
+
   lazy val argumentTypes: Parser[List[Expression]] =
-    (p('(') ~> commit(rep1sep(typeExpression, p(',')) <~ p(')'))) withFailureMessage {
+    (p('(') ~> commit(rep1sep(typeExpression, p(',')) <~ endOfGroup(')'))) withFailureMessage {
       (p: Position) => withPos("Group of arguments expected.", p)
     }
   lazy val parensType: Parser[Expression] = p('(') ~> typeExpression <~ p(')')
@@ -68,7 +78,7 @@ class TypeParser(val program: InoxProgram) extends StdTokenParsers with Position
 
   lazy val appliedType: Parser[Expression] = for {
     n <- name
-    oArgs <- opt(p('[') ~> rep1sep(typeExpression, p(',')) <~ p(']'))
+    oArgs <- opt(p('[') ~> rep1sep(typeExpression, p(',')) <~ endOfGroup(']'))
   } yield oArgs match {
     case None => n
     case Some(args) => Application(n, args)

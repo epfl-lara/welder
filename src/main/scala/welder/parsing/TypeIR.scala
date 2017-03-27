@@ -45,17 +45,17 @@ trait TypeIR extends IR {
     "String"  -> trees.StringType,
     "Unit"    -> trees.UnitType).map({ case (n, v) => Name(n) -> v }).toMap
 
-  lazy val parametric: Map[Value, Seq[trees.Type] => Option[trees.Type]] =
+  lazy val parametric: Map[Value, (Int, Seq[trees.Type] => trees.Type)] =
     (primitives ++ adts).toMap
 
   lazy val primitives = Seq(
-    "Set" -> withNParams(1, (ts: Seq[trees.Type]) => trees.SetType(ts.head)),
-    "Map" -> withNParams(2, (ts: Seq[trees.Type]) => trees.MapType(ts(0), ts(1))),
-    "Bag" -> withNParams(1, (ts: Seq[trees.Type]) => trees.BagType(ts.head))).map({ case (n, v) => Name(n) -> v })
+    "Set" -> (1, (ts: Seq[trees.Type]) => trees.SetType(ts.head)),
+    "Map" -> (2, (ts: Seq[trees.Type]) => trees.MapType(ts(0), ts(1))),
+    "Bag" -> (1, (ts: Seq[trees.Type]) => trees.BagType(ts.head))).map({ case (n, v) => Name(n) -> v })
 
   lazy val adts = symbols.adts.toSeq.flatMap({
     case (i, d) => {
-      val f = withNParams(d.tparams.length, (ts: Seq[trees.Type]) => trees.ADTType(i, ts))
+      val f = (d.tparams.length, (ts: Seq[trees.Type]) => trees.ADTType(i, ts))
 
       Seq(
         Name(i.name) -> f,
@@ -63,41 +63,44 @@ trait TypeIR extends IR {
     }
   })
 
-  def withNParams(n: Int, f: Seq[trees.Type] => trees.Type): Seq[trees.Type] => Option[trees.Type] = {
-    case xs if xs.length == n => Some(f(xs))
-    case _ => None
-  }
-
-  import Utils.traverse
+  import Utils.{either, traverse}
 
   def toInoxType(expr: Expression): Either[Seq[ErrorLocation], trees.Type] = expr match {
 
-    case Operation(Tuple, irs) if irs.size >= 2 => for {
-      tpes <- traverse(irs.map(toInoxType(_))).left.map(_.flatten).right
-    } yield trees.TupleType(tpes)
+    case Operation(Tuple, irs) if irs.size >= 2 =>
+      traverse(irs.map(toInoxType(_))).left.map(_.flatten).right.map(trees.TupleType(_))
 
-    case Operation(Arrow, Seq(Operation(Group, froms), to)) => for {
-      argTpes <- traverse(froms.map(toInoxType(_))).left.map(_.flatten).right
-      retTpe  <- toInoxType(to).right
-    } yield trees.FunctionType(argTpes, retTpe)
-
-    case Operation(Arrow, Seq(from, to)) => for {
-      argTpe <- toInoxType(from).right
-      retTpe <- toInoxType(to).right
-    } yield trees.FunctionType(Seq(argTpe), retTpe)
-
-    case Application(l@Literal(value), irs) => for {
-      cons <- parametric.get(value) match {
-        case None => Left(Seq(ErrorLocation("Unknown type constructor: " + value, l.pos))).right
-        case Some(p) => Right(p).right
+    case Operation(Arrow, Seq(Operation(Group, froms), to)) => 
+      either(
+        traverse(froms.map(toInoxType(_))).left.map(_.flatten),
+        toInoxType(to)
+      ){
+        case (argTpes, retTpe) => trees.FunctionType(argTpes, retTpe)
       }
-      tpes <- traverse(irs.map(toInoxType(_))).left.map(_.flatten).right
-      appl <- cons(tpes) match {
-        case None => Left(Seq(ErrorLocation("Incorrect number of arguments for type constructor: " + value, l.pos))).right
-        case Some(t) => Right(t).right
-      }
-    } yield appl
 
+    case Operation(Arrow, Seq(from, to)) =>
+      either(
+        toInoxType(from),
+        toInoxType(to)
+      ){
+        case (argTpe, retTpe) => trees.FunctionType(Seq(argTpe), retTpe)
+      }
+
+    case Application(l@Literal(value), irs) =>
+      either(
+        parametric.get(value) match {
+          case None => Left(Seq(ErrorLocation("Unknown type constructor: " + value, l.pos)))
+          case Some((n, cons)) => if (n == irs.length) {
+            Right(cons)
+          } else {
+            Left(Seq(ErrorLocation("Type constructor " + value + " takes " + n + " argument(s), " + irs.length + " were given.", l.pos)))
+          }
+        },
+        traverse(irs.map(toInoxType(_))).left.map(_.flatten)
+      ){
+        case (cons, tpes) => cons(tpes)
+      }
+      
     case Literal(EmbeddedType(t)) => Right(t)
 
     case Literal(Name(BVType(t))) => Right(t)

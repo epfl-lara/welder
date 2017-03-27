@@ -37,6 +37,15 @@ object Utils {
     }
   }
 
+  def either[E, A, B, R](a: Either[Seq[E], A], b: Either[Seq[E], B])(f: (A, B) => R): Either[Seq[E], R] = {
+    (a, b) match {
+      case (Left(eas), Left(ebs)) => Left(eas ++ ebs)
+      case (Left(eas), _) => Left(eas)
+      case (_, Left(ebs)) => Left(ebs)
+      case (Right(xa), Right(xb)) => Right(f(xa, xb))
+    }
+  }
+
   def toFraction(string: String): (BigInt, BigInt) = {
     val parts = string.split('.')
 
