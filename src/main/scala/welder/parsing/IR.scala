@@ -1,6 +1,8 @@
 package welder
 package parsing
 
+import scala.util.parsing.input.Positional
+
 /** Contains abstract Intermediate Representation (IR) language. */ 
 trait IR {
 
@@ -11,7 +13,7 @@ trait IR {
   type Field       // Fields.
   type Quantifier  // Quantifiers.
 
-  sealed abstract class Expression
+  sealed abstract class Expression extends Positional
   case class Variable(identifier: Identifier) extends Expression
   case class Application(callee: Expression, args: Seq[Expression]) extends Expression
   case class Abstraction(quantifier: Quantifier, bindings: Seq[(Identifier, Option[Type])], body: Expression) extends Expression

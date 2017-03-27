@@ -26,6 +26,17 @@ object Utils {
     }
   }
 
+  def traverse[E, A](xs: Seq[Either[E, A]]): Either[Seq[E], Seq[A]] = {
+    val zero: Either[Seq[E], Seq[A]] = Right(Seq[A]())
+
+    xs.foldRight(zero) {
+      case (Right(x), Right(xs)) => Right(x +: xs)
+      case (Right(_), Left(es)) => Left(es)
+      case (Left(e), Right(_)) => Left(Seq(e))
+      case (Left(e), Left(es)) => Left(e +: es)
+    }
+  }
+
   def toFraction(string: String): (BigInt, BigInt) = {
     val parts = string.split('.')
 

@@ -4,10 +4,11 @@ package parsing
 import scala.util.parsing.combinator._
 import scala.util.parsing.combinator.syntactical._
 import scala.util.parsing.combinator.token._
+import scala.util.parsing.input._
 
 import inox.InoxProgram
 
-class TypeParser(val program: InoxProgram) extends StdTokenParsers {
+class TypeParser(val program: InoxProgram) extends StdTokenParsers with PositionalErrors {
 
   type Tokens = InoxLexer
 
@@ -23,10 +24,16 @@ class TypeParser(val program: InoxProgram) extends StdTokenParsers {
 
   val symbols = program.symbols
 
-  def p(p: Char): Parser[Token] = elem(Parenthesis(p)) | elem(Punctuation(p))
-  def kw(s: String): Parser[Token] = elem(Keyword(s))
+  def withPos(error: String, pos: Position) = ErrorLocation(error, pos).toString
 
-  lazy val typeExpression: Parser[Expression] = rep1sep(argumentTypes | uniqueType, kw("=>")) ^^ {
+  def p(c: Char): Parser[Token] = (elem(Parenthesis(c)) | elem(Punctuation(c))) withFailureMessage {
+    (p: Position) => withPos("Expected character: " + c, p)
+  }
+  def kw(s: String): Parser[Token] = elem(Keyword(s)) withFailureMessage {
+    (p: Position) => withPos("Expected keyword: " + s, p)
+  }
+
+  lazy val typeExpression: Parser[Expression] = positioned(rep1sep(betweenArrows, kw("=>")) ^^ {
     case tss => tss.reverse match {
       case returnTypes :: rest => {
         val retType = returnTypes match {
@@ -37,21 +44,27 @@ class TypeParser(val program: InoxProgram) extends StdTokenParsers {
       }
       case Nil => program.ctx.reporter.fatalError("Empty list of types.")  // Should never happen.
     }
-  } withErrorMessage "Type expected."
+  }).withFailureMessage((p: Position) => withPos("Type expected.", p))
+
+  lazy val betweenArrows: Parser[List[Expression]] = (argumentTypes | uniqueType) withFailureMessage {
+    (p: Position) => withPos("Expected type or group of types.", p)
+  }
 
   lazy val uniqueType: Parser[List[Expression]] = (appliedType | parensType) ^^ {
     case t => List(t)
   }
 
-  lazy val argumentTypes: Parser[List[Expression]] = p('(') ~> rep1sep(typeExpression, p(',')) <~ p(')')
-
+  lazy val argumentTypes: Parser[List[Expression]] =
+    (p('(') ~> commit(rep1sep(typeExpression, p(',')) <~ p(')'))) withFailureMessage {
+      (p: Position) => withPos("Group of arguments expected.", p)
+    }
   lazy val parensType: Parser[Expression] = p('(') ~> typeExpression <~ p(')')
 
-  lazy val name: Parser[Expression] = acceptMatch("Non-function type expected.", {
+  lazy val name: Parser[Expression] = positioned(acceptMatch("Non-function type expected.", {
     case RawType(t) => Literal(EmbeddedType(t))
     case RawIdentifier(i) => Literal(EmbeddedIdentifier(i))
     case lexical.Identifier(s) => Literal(Name(s))
-  })
+  }))
 
   lazy val appliedType: Parser[Expression] = for {
     n <- name
@@ -61,6 +74,8 @@ class TypeParser(val program: InoxProgram) extends StdTokenParsers {
     case Some(args) => Application(n, args)
   }
 
-  lazy val inoxType: Parser[trees.Type] = typeExpression ^? irToInoxType
-  lazy val irToInoxType: PartialFunction[Expression, trees.Type] = Utils.toPartial(toInoxType(_))
+  lazy val inoxType: Parser[trees.Type] = (typeExpression ^^ toInoxType).flatMap { case e => e match {
+    case Right(t) => success(t)
+    case Left(es) => err(es.map(_.toString).mkString("\n\n"))
+  }}
 }

@@ -3,6 +3,8 @@ package parsing
 
 import inox._
 
+import scala.util.parsing.input.Position
+
 trait TypeIR extends IR {
 
   val trees: inox.ast.Trees
@@ -14,9 +16,9 @@ trait TypeIR extends IR {
   type Quantifier = Nothing
 
   sealed abstract class Value
-  case class Name(name: String) extends Value
-  case class EmbeddedType(tpe: trees.Type) extends Value
-  case class EmbeddedIdentifier(id: inox.Identifier) extends Value
+  case class Name(name: String) extends Value { override def toString = name }
+  case class EmbeddedType(tpe: trees.Type) extends Value { override def toString = tpe.toString }
+  case class EmbeddedIdentifier(id: inox.Identifier) extends Value { override def toString = id.toString }
 
   sealed abstract class Operator
   case object Group extends Operator
@@ -68,34 +70,43 @@ trait TypeIR extends IR {
 
   import Utils.traverse
 
-  def toInoxType(expr: Expression): Option[trees.Type] = expr match {
+  def toInoxType(expr: Expression): Either[Seq[ErrorLocation], trees.Type] = expr match {
 
     case Operation(Tuple, irs) if irs.size >= 2 => for {
-      tpes <- traverse(irs.map(toInoxType(_)))
+      tpes <- traverse(irs.map(toInoxType(_))).left.map(_.flatten).right
     } yield trees.TupleType(tpes)
 
     case Operation(Arrow, Seq(Operation(Group, froms), to)) => for {
-      argTpes <- traverse(froms.map(toInoxType(_)))
-      retTpe  <- toInoxType(to)
+      argTpes <- traverse(froms.map(toInoxType(_))).left.map(_.flatten).right
+      retTpe  <- toInoxType(to).right
     } yield trees.FunctionType(argTpes, retTpe)
 
     case Operation(Arrow, Seq(from, to)) => for {
-      argTpe <- toInoxType(from)
-      retTpe <- toInoxType(to)
+      argTpe <- toInoxType(from).right
+      retTpe <- toInoxType(to).right
     } yield trees.FunctionType(Seq(argTpe), retTpe)
 
-    case Application(Literal(value), irs) => for {
-      cons <- parametric.get(value)
-      tpes <- traverse(irs.map(toInoxType(_)))
-      appl <- cons(tpes)
+    case Application(l@Literal(value), irs) => for {
+      cons <- parametric.get(value) match {
+        case None => Left(Seq(ErrorLocation("Unknown type constructor: " + value, l.pos))).right
+        case Some(p) => Right(p).right
+      }
+      tpes <- traverse(irs.map(toInoxType(_))).left.map(_.flatten).right
+      appl <- cons(tpes) match {
+        case None => Left(Seq(ErrorLocation("Incorrect number of arguments for type constructor: " + value, l.pos))).right
+        case Some(t) => Right(t).right
+      }
     } yield appl
 
-    case Literal(EmbeddedType(t)) => Some(t)
+    case Literal(EmbeddedType(t)) => Right(t)
 
-    case Literal(Name(BVType(t))) => Some(t)
+    case Literal(Name(BVType(t))) => Right(t)
 
-    case Literal(value) => basic.get(value)
+    case l@Literal(value) => basic.get(value) match {
+      case None => Left(Seq(ErrorLocation("Unknown type: " + value, l.pos)))
+      case Some(t) => Right(t)
+    }
 
-    case _ => None
+    case _ => Left(Seq(ErrorLocation("Invalid type.", expr.pos)))
   }
 }
