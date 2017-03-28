@@ -1,8 +1,19 @@
 Inox String Interpolation
 =========================
 
+# Table of Content
+
+- ***[Primitives](#primitives)***
+  - [Strings](#primitive-strings)
+  - [Sets](#primitive-sets)
+  - [Bags](#primitive-bags)
+  - [Maps](#primitive-maps)
+
+
+<a name="primitives"></a>
 ## Primitives
 
+<a name="primitive-strings"></a>
 ### Strings
 
 #### Literal Syntax
@@ -27,6 +38,7 @@ Inox String Interpolation
 | -------- | ---- | ------------- | ---------- | ----------- | ---------------- |
 | `++` | `(String, String) => String` | Left-associative | ??? | Returns the concatenation of the two strings. | `StringConcat` |
 
+<a name="primitive-sets"></a>
 ### Sets
 
 #### Constructor
@@ -64,6 +76,7 @@ Inox String Interpolation
 | `∩` | `(A, Set[A]) => Boolean` | Left-associative | ??? | Returns the intersection of the two sets. | `SetIntersection` |
 | `∖` | `(A, Set[A]) => Boolean` | Left-associative | ??? | Returns the elements of the first set minus the elements of the second set. | `SetDifference` |
 
+<a name="primitive-bags"></a>
 ### Bags
 
 #### Constructor
@@ -89,6 +102,7 @@ Inox String Interpolation
 | `bagIntersection[A]` | `(Bag[A], Bag[A]) => Bag[A]` | Returns the intersection of the two bags. | `BagIntersection` |
 | `bagDifference[A]` | `(Bag[A], Bag[A]) => Bag[A]` | Returns the elements of the first bag minus the elements of the second bag. | `BagDifference` |
 
+<a name="primitive-maps"></a>
 ### Maps
 
 #### Constructor
