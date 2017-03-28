@@ -86,7 +86,8 @@ trait StringContextPosition extends Position {
   }
 
   override def lineContents = {
-    scToString(context).lines.drop(line - 1).next
+    val it = scToString(context).lines.drop(line - 1)
+    if (it.hasNext) it.next else ""
   }
 }
 
