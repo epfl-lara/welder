@@ -4,33 +4,39 @@ package parsing
 
 trait BuiltInNames {
 
-  sealed abstract class BuiltIn
+  sealed abstract class BuiltIn(val params: Option[Int], val tparams: Int) {
+    val isConstructor = false
+  }
 
-  case object AsInstanceOf extends BuiltIn
-  case object IsInstanceOf extends BuiltIn
+  trait Constructor { self: BuiltIn =>
+    override abstract val isConstructor = true
+  }
 
-  case object StringConcatenate extends BuiltIn
-  case object StringLength extends BuiltIn
-  case object StringSubstring extends BuiltIn
+  case object AsInstanceOf extends BuiltIn(Some(1), 1)
+  case object IsInstanceOf extends BuiltIn(Some(1), 1)
 
-  case object SetConstructor extends BuiltIn
-  case object SetContains extends BuiltIn
-  case object SetAdd extends BuiltIn
-  case object SetUnion extends BuiltIn
-  case object SetIntersection extends BuiltIn
-  case object SetDifference extends BuiltIn
-  case object SetSubset extends BuiltIn
+  case object StringConcatenate extends BuiltIn(Some(2), 0)
+  case object StringLength extends BuiltIn(Some(1), 0)
+  case object StringSubstring extends BuiltIn(Some(3), 0)
 
-  case object BagConstructor extends BuiltIn
-  case object BagMultiplicity extends BuiltIn
-  case object BagAdd extends BuiltIn
-  case object BagUnion extends BuiltIn
-  case object BagIntersection extends BuiltIn
-  case object BagDifference extends BuiltIn
+  case object SetConstructor extends BuiltIn(None, 1) with Constructor
+  case object SetContains extends BuiltIn(Some(2), 1)
+  case object SetAdd extends BuiltIn(Some(2), 1)
+  case object SetUnion extends BuiltIn(Some(2), 1)
+  case object SetIntersection extends BuiltIn(Some(2), 1)
+  case object SetDifference extends BuiltIn(Some(2), 1)
+  case object SetSubset extends BuiltIn(Some(2), 1)
 
-  case object MapConstructor extends BuiltIn
-  case object MapApply extends BuiltIn
-  case object MapUpdated extends BuiltIn
+  case object BagConstructor extends BuiltIn(None, 1) with Constructor
+  case object BagMultiplicity extends BuiltIn(Some(2), 1)
+  case object BagAdd extends BuiltIn(Some(2), 1)
+  case object BagUnion extends BuiltIn(Some(2), 1)
+  case object BagIntersection extends BuiltIn(Some(2), 1)
+  case object BagDifference extends BuiltIn(Some(2), 1)
+
+  case object MapConstructor extends BuiltIn(None, 2) with Constructor
+  case object MapApply extends BuiltIn(Some(2), 2)
+  case object MapUpdated extends BuiltIn(Some(2), 3)
 
   val names: Map[String, BuiltIn]
 

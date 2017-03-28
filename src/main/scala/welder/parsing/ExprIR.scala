@@ -5,6 +5,8 @@ import inox._
 
 import scala.util.parsing.input._
 
+import Utils.plural
+
 /** IR for expressions. */
 class ExprIR(val program: InoxProgram) extends IR {
 
@@ -55,6 +57,32 @@ class ExprIR(val program: InoxProgram) extends IR {
   case object Forall extends Quantifier
   case object Exists extends Quantifier
   case object Choose extends Quantifier
+
+
+  //---- Errors ----//
+
+  def functionArity(name: String, expected: Int, actual: Int, kind: String = "Function"): String =
+    kind + " `" + name + "` takes " + expected + " argument" + plural(expected, "", "s") + ", " + 
+      actual + " " + plural(actual, "was", "were") + " given."
+  
+  def functionTypeArity(name: String, expected: Int, actual: Int, kind: String = "Function"): String =
+    if (expected == 0) {
+      kind + " `" + name + "` doesn't have any type parameters."
+    } else {
+      kind + " `" + name + "` takes " + expected + " type argument" + plural(expected, "", "s") + ", " + 
+        actual + " " + plural(actual, "was", "were") + " given."
+    }
+
+  lazy val expectedArrowBinding: String = "Expected binding of the form `key -> value`."
+
+  lazy val unexpectedBinding: String = "Unexpected binding. Bindings can only appear in bags and maps constructors."
+
+  lazy val unknownConstruct: String = "Unexpected kernel."
+
+  lazy val tupleInsufficientLength: String = "Tuples should be of length greater or equal to 2."
+
+  lazy val warningSetOrBag: String = "Not all elements are of the same shape. " +
+    "Use bindings of the form `key -> value` for bag literals and naked values for set literals."
 
   //---- Extractors ----//
 
@@ -175,13 +203,20 @@ class ExprIR(val program: InoxProgram) extends IR {
     }
   }
 
+  object PrimitiveFunction {
+    def unapply(expr: Expression): Option[(bi.BuiltIn, String, Seq[Expression], Option[Seq[Type]])] = expr match {
+      case Application(TypeApplication(Literal(Name(name@bi.BuiltIn(builtIn))), tpes), args) =>
+        Some((builtIn, name, args, Some(tpes)))
+      case Application(Literal(Name(name@bi.BuiltIn(builtIn))), args) =>
+        Some((builtIn, name, args, None))
+      case _ => None
+    }
+  }
+
   object SetConstruction {
     def unapply(expr: Expression): Option[(Seq[Expression], Option[Type])] = expr match {
-      case Application(TypeApplication(Literal(Name(bi.BuiltIn(bi.SetConstructor))), Seq(tpe)), es) => 
-        Some((es, Some(tpe)))
-      case Application(Literal(Name(bi.BuiltIn(bi.SetConstructor))), es) => 
-        Some((es, None))
-      case Operation("Set", es) => 
+      case PrimitiveFunction(bi.SetConstructor, f, es, otpes) => Some((es, otpes.map(_.head)))
+      case Operation("Set", es@Bindings(_, Seq())) => 
         Some((es, None))
       case _ => None
     }
@@ -189,8 +224,7 @@ class ExprIR(val program: InoxProgram) extends IR {
 
   object SetBinaryOperation {
     def unapply(expr: Expression): Option[(Expression, Expression, (trees.Expr, trees.Expr) => trees.Expr, Option[Type])] = expr match {
-      case Application(TypeApplication(Literal(Name(SetBinFun(f))), Seq(tpe)), Seq(set1, set2)) => Some((set1, set2, f, Some(tpe)))
-      case Application(Literal(Name(SetBinFun(f))), Seq(set1, set2)) => Some((set1, set2, f, None))
+      case PrimitiveFunction(SetBinFun(f), _, Seq(set1, set2), otpes) => Some((set1, set2, f, otpes.map(_.head)))
       case Operation(SetBinOp(f), Seq(set1, set2)) => Some((set1, set2, f, None))
       case _ => None
     }
@@ -205,12 +239,12 @@ class ExprIR(val program: InoxProgram) extends IR {
     }
 
     object SetBinFun {
-      def unapply(string: String): Option[(trees.Expr, trees.Expr) => trees.Expr] = string match {
-        case bi.BuiltIn(bi.SetUnion) => 
+      def unapply(builtIn: bi.BuiltIn): Option[(trees.Expr, trees.Expr) => trees.Expr] = builtIn match {
+        case bi.SetUnion => 
           Some({ (lhs: trees.Expr, rhs: trees.Expr) => trees.SetUnion(lhs, rhs) })
-        case bi.BuiltIn(bi.SetIntersection) =>
+        case bi.SetIntersection =>
           Some({ (lhs: trees.Expr, rhs: trees.Expr) => trees.SetIntersection(lhs, rhs) })
-        case bi.BuiltIn(bi.SetDifference) =>
+        case bi.SetDifference =>
           Some({ (lhs: trees.Expr, rhs: trees.Expr) => trees.SetDifference(lhs, rhs) })
         case _ => None
       }
@@ -219,10 +253,8 @@ class ExprIR(val program: InoxProgram) extends IR {
 
   object SubsetOperation {
     def unapply(expr: Expression): Option[(Expression, Expression, Option[Type])] = expr match {
-      case Application(TypeApplication(Literal(Name(bi.BuiltIn(bi.SetSubset))), Seq(tpe)), Seq(set1, set2)) =>
-        Some((set1, set2, Some(tpe)))
-      case Application(Literal(Name(bi.BuiltIn(bi.SetSubset))), Seq(set1, set2)) =>
-        Some((set1, set2, None))
+      case PrimitiveFunction(bi.SetSubset, _, Seq(set1, set2), otpes) =>
+        Some((set1, set2, otpes.map(_.head)))
       case Operation("⊆", Seq(set1, set2)) =>
         Some((set1, set2, None))
       case _ => None
@@ -231,10 +263,8 @@ class ExprIR(val program: InoxProgram) extends IR {
 
   object ContainsOperation {
     def unapply(expr: Expression): Option[(Expression, Expression, Option[Type])] = expr match {
-      case Application(TypeApplication(Literal(Name(bi.BuiltIn(bi.SetContains))), Seq(tpe)), Seq(set, elem)) =>
-        Some((set, elem, Some(tpe)))
-      case Application(Literal(Name(bi.BuiltIn(bi.SetContains))), Seq(set, elem)) =>
-        Some((set, elem, None))
+      case PrimitiveFunction(bi.SetContains, _, Seq(set, elem), otpes) =>
+        Some((set, elem, otpes.map(_.head)))
       case Operation("∈", Seq(elem, set)) =>
         Some((set, elem, None))
       case _ => None
@@ -243,18 +273,16 @@ class ExprIR(val program: InoxProgram) extends IR {
 
   object SetAddOperation {
     def unapply(expr: Expression): Option[(Expression, Expression, Option[Type])] = expr match {
-      case Application(TypeApplication(Literal(Name(bi.BuiltIn(bi.SetAdd))), Seq(tpe)), Seq(set, elem)) =>
-        Some((set, elem, Some(tpe)))
-      case Application(Literal(Name(bi.BuiltIn(bi.SetAdd))), Seq(set, elem)) =>
-        Some((set, elem, None))
+      case PrimitiveFunction(bi.SetAdd, _, Seq(set, elem), otpes) => Some((set, elem, otpes.map(_.head)))
       case _ => None
     }
   }
 
   object ConcatenateOperation {
     def unapply(expr: Expression): Option[(Expression, Expression)] = expr match {
-      case Application(Literal(Name(bi.BuiltIn(bi.StringConcatenate))), Seq(str1, str2)) =>
+      case PrimitiveFunction(bi.StringConcatenate, _, Seq(str1, str2), _) => {
         Some((str1, str2))
+      }
       case Operation("++", Seq(str1, str2)) =>
         Some((str1, str2))
       case _ => None
@@ -263,8 +291,9 @@ class ExprIR(val program: InoxProgram) extends IR {
 
   object SubstringOperation {
     def unapply(expr: Expression): Option[(Expression, Expression, Expression)] = expr match {
-      case Application(Literal(Name(bi.BuiltIn(bi.StringSubstring))), Seq(str, start, end)) =>
+      case PrimitiveFunction(bi.StringConcatenate, _, Seq(str, start, end), _) => {
         Some((str, start, end))
+      }
       case _ => None
     }
   }
@@ -274,49 +303,39 @@ class ExprIR(val program: InoxProgram) extends IR {
       case Operation("->", Seq(a, b)) => Some((a, b))
       case _ => None
     }
+  }
 
-    def getAll(es: Seq[Expression]): Option[Seq[(Expression, Expression)]] = {
-      val bs = es.collect({
-        case Binding(a, b) => (a, b)
+  object Bindings {
+    def unapply(exprs: Seq[Expression]): Option[(Seq[Expression], Seq[(Expression, Expression)])] = {
+      Some(Utils.classify(exprs) {
+        case Binding(x, y) => Right((x, y))
+        case x => Left(x)
       })
-
-      if (bs.length == es.length) {
-        Some(bs)
-      }
-      else {
-        None
-      }
     }
   }
 
   object BagConstruction {
-    def unapply(expr: Expression): Option[(Seq[(Expression, Expression)], Option[Type])] = expr match {
-      case Application(TypeApplication(Literal(Name(bi.BuiltIn(bi.BagConstructor))), Seq(tpe)), es) => 
-        Binding.getAll(es).map((_, Some(tpe)))
-      case Application(Literal(Name(bi.BuiltIn(bi.BagConstructor))), es) => 
-        Binding.getAll(es).map((_, None))
-      case Operation("Set", es) => 
-        Binding.getAll(es).map((_, None))
+    def unapply(expr: Expression): Option[(Seq[Expression], Option[Type])] = expr match {
+      case PrimitiveFunction(bi.BagConstructor, _, args, otpes) => 
+        Some((args, otpes.map(_.head)))
+      case Operation("Set", es@Bindings(Seq(), _)) => 
+        Some((es, None))
       case _ => None
     }
   }
 
   object BagMultiplicityOperation {
     def unapply(expr: Expression): Option[(Expression, Expression, Option[Type])] = expr match {
-      case Application(TypeApplication(Literal(Name(bi.BuiltIn(bi.BagMultiplicity))), Seq(tpe)), Seq(m, k)) => 
-        Some((m, k, Some(tpe)))
-      case Application(Literal(Name(bi.BuiltIn(bi.BagMultiplicity))), Seq(m, k)) => 
-        Some((m, k, None))
+      case PrimitiveFunction(bi.BagMultiplicity, _, Seq(bag, elem), otpes) => 
+        Some((bag, elem, otpes.map(_.head)))
       case _ => None
     }
   }
 
   object BagAddOperation {
     def unapply(expr: Expression): Option[(Expression, Expression, Option[Type])] = expr match {
-      case Application(TypeApplication(Literal(Name(bi.BuiltIn(bi.BagAdd))), Seq(tpe)), Seq(bag, elem)) =>
-        Some((bag, elem, Some(tpe)))
-      case Application(Literal(Name(bi.BuiltIn(bi.BagAdd))), Seq(bag, elem)) =>
-        Some((bag, elem, None))
+      case PrimitiveFunction(bi.BagAdd, _, Seq(bag, elem), otpes) => 
+        Some((bag, elem, otpes.map(_.head)))
       case _ => None
     }
   }
@@ -324,57 +343,45 @@ class ExprIR(val program: InoxProgram) extends IR {
   object BagBinaryOperation {
 
     def unapply(expr: Expression): Option[(Expression, Expression, (trees.Expr, trees.Expr) => trees.Expr, Option[Type])] = expr match {
-      case Application(TypeApplication(Literal(Name(BagBinFun(f))), Seq(tpe)), Seq(map1, map2)) =>
-        Some((map1, map2, f, Some(tpe)))
-      case Application(Literal(Name(BagBinFun(f))), Seq(map1, map2)) =>
-        Some((map1, map2, f, None))
+      case PrimitiveFunction(BagBinFun(f), _, Seq(bag1, bag2), otpes) =>
+        Some((bag1, bag2, f, otpes.map(_.head)))
       case _ => None
     }
 
     object BagBinFun {
-      def unapply(string: String): Option[(trees.Expr, trees.Expr) => trees.Expr] = string match {
-        case bi.BuiltIn(bi.BagUnion) => Some((map1: trees.Expr, map2: trees.Expr) => trees.BagUnion(map1, map2))
-        case bi.BuiltIn(bi.BagIntersection) => Some((map1: trees.Expr, map2: trees.Expr) => trees.BagIntersection(map1, map2))
-        case bi.BuiltIn(bi.BagDifference) => Some((map1: trees.Expr, map2: trees.Expr) => trees.BagDifference(map1, map2))
+      def unapply(builtIn: bi.BuiltIn): Option[(trees.Expr, trees.Expr) => trees.Expr] = builtIn match {
+        case bi.BagUnion => Some((map1: trees.Expr, map2: trees.Expr) => trees.BagUnion(map1, map2))
+        case bi.BagIntersection => Some((map1: trees.Expr, map2: trees.Expr) => trees.BagIntersection(map1, map2))
+        case bi.BagDifference => Some((map1: trees.Expr, map2: trees.Expr) => trees.BagDifference(map1, map2))
         case _ => None
       }
     }
   }
 
   object MapConstruction {
-    def unapply(expr: Expression): Option[(Expression, Seq[(Expression, Expression)], Option[Type], Option[Type])] = expr match {
-      case Application(TypeApplication(Literal(Name(bi.BuiltIn(bi.MapConstructor))), Seq(tpe1, tpe2)), Seq(e, es @ _*)) => 
-        Binding.getAll(es).map((e, _, Some(tpe1), Some(tpe2)))
-      case Application(Literal(Name(bi.BuiltIn(bi.MapConstructor))), Seq(e, es @ _*)) => 
-        Binding.getAll(es).map((e, _, None, None))
+    def unapply(expr: Expression): Option[(Expression, Seq[Expression], Option[Either[Type, (Type, Type)]])] = expr match {
+      case PrimitiveFunction(bi.MapConstructor, _, Seq(e, es @ _*), otpes) =>
+        Some((e, es, otpes.map({ case Seq(t1, t2) => Right((t1, t2))})))
       case TypeApplication(Operation("Map", Seq(e, es @ _*)), Seq(t)) => 
-        Binding.getAll(es).map((e, _, Some(t), None))
+        Some((e, es, Some(Left(t))))
       case Operation("Map", Seq(e, es @ _*)) => 
-        Binding.getAll(es).map((e, _, None, None))
+        Some((e, es, None))
       case _ => None
     }
   }
 
   object MapApplyOperation {
     def unapply(expr: Expression): Option[(Expression, Expression, Option[(Type, Type)])] = expr match {
-      case Application(TypeApplication(Literal(Name(bi.BuiltIn(bi.MapApply))), Seq(tpe1, tpe2)), Seq(map, elem)) =>
-        Some((map, elem, Some((tpe1, tpe2))))
-      case Application(Literal(Name(bi.BuiltIn(bi.MapApply))), Seq(map, elem)) =>
-        Some((map, elem, None))
+      case PrimitiveFunction(bi.MapApply, _, Seq(map, key), otpes) =>
+        Some((map, key, otpes.map({ case Seq(t1, t2) => (t1, t2)})))
       case _ => None
     }
   }
 
   object MapUpdatedOperation {
     def unapply(expr: Expression): Option[(Expression, Expression, Expression, Option[(Type, Type)])] = expr match {
-      case Application(TypeApplication(Literal(Name(bi.BuiltIn(bi.MapUpdated))), Seq(tpe1, tpe2)), Seq(map, key, value)) =>
-        Some((map, key, value, Some((tpe1, tpe2))))
-      case Application(TypeApplication(Literal(Name(bi.BuiltIn(bi.MapUpdated))), Seq(tpe1, tpe2)), Seq(map, Binding(key, value))) =>
-        Some((map, key, value, Some((tpe1, tpe2))))
-      case Application(Literal(Name(bi.BuiltIn(bi.MapUpdated))), Seq(map, key, value)) =>
-        Some((map, key, value, None))
-      case Application(Literal(Name(bi.BuiltIn(bi.MapUpdated))), Seq(map, Binding(key, value))) =>
-        Some((map, key, value, None))
+      case PrimitiveFunction(bi.MapUpdated, _, Seq(map, key, value), otpes) =>
+        Some((map, key, value, otpes.map({ case Seq(t1, t2) => (t1, t2)})))
       case _ => None
     }
   }
@@ -452,6 +459,17 @@ class ExprIR(val program: InoxProgram) extends IR {
         Constraint.isNumeric(expected)
       })
 
+      // Empty set literal.
+      // TODO: Also accept it as a Bag literal.
+      case Operation("Set", Seq()) => {
+        val elementType = Unknown.fresh(expr.pos)
+        Constrained.withUnifier({
+          (unifier: Unifier) => trees.FiniteSet(Seq(), unifier(elementType))
+        }).addConstraint({
+          Constraint.equal(expected, trees.SetType(elementType))
+        })
+      }
+
       //---- Variables ----//
 
       // Embedded identifier.
@@ -481,7 +499,9 @@ class ExprIR(val program: InoxProgram) extends IR {
         e
       }).addConstraint({
         Constraint.equal(e.getType(symbols), expected)
-      })
+      }).checkImmediate(
+        e.getType(symbols) != trees.Untyped, "Untyped embedded expression.", expr.pos
+      )
 
       // Embedded Scala values.
       case Literal(EmbeddedValue(value)) => value match {
@@ -652,6 +672,30 @@ class ExprIR(val program: InoxProgram) extends IR {
         })
       }
 
+      //---- Arity Errors on Primitive Functions and Constructors ----//
+
+      case PrimitiveFunction(builtIn, name, args, otpes) if 
+          (args.length != builtIn.params || (otpes.isDefined && otpes.get.length != builtIn.tparams)) => {
+
+        val kind = if (builtIn.isConstructor) "Primitive constructor" else "Primitive function"
+
+        val argsError = if (builtIn.params.isDefined && args.length != builtIn.params.get) Seq {
+          functionArity(name, builtIn.params.get, args.length, kind) 
+        } else Seq()
+
+        val typesError = if (otpes.isDefined && otpes.get.length != builtIn.tparams) Seq {
+          functionTypeArity(name, builtIn.tparams, otpes.get.length, kind)
+        } else Seq()
+
+        Constrained.fail((argsError ++ typesError).map({ case error => (error, expr.pos) }))
+      }
+
+      //---- Syntax Error on Set or Bags Literals ----//
+
+      case Operation("Set", Bindings(es, bs)) if (!es.isEmpty && !bs.isEmpty) => {
+        Constrained.fail(warningSetOrBag, expr.pos)
+      }
+
       //---- Operations on Strings ----//
 
       // String concatenation.
@@ -683,7 +727,7 @@ class ExprIR(val program: InoxProgram) extends IR {
       }
 
       // String length.
-      case Application(Literal(Name(bi.BuiltIn(bi.StringLength))), Seq(s)) => {
+      case PrimitiveFunction(bi.StringLength, _, Seq(s), _) => {
         val stringExpected = Unknown.fresh
         typeCheck(s, stringExpected).map({
           case e => trees.StringLength(e) 
@@ -696,7 +740,13 @@ class ExprIR(val program: InoxProgram) extends IR {
 
       //---- Operations on Bags ----//
 
-      case BagConstruction(bs, otpe) => {
+      case BagConstruction(Bindings(fs, _), _) if (!fs.isEmpty) => {
+        Constrained.fail(fs.map {
+          (e: Expression) => (expectedArrowBinding, e.pos)
+        })
+      }
+
+      case BagConstruction(Bindings(_, bs), otpe) => {
         val elementType = otpe.getOrElse(Unknown.fresh)
         val freshs = Seq.fill(bs.length)(Unknown.fresh)
         val countType = Unknown.fresh
@@ -722,6 +772,7 @@ class ExprIR(val program: InoxProgram) extends IR {
         })
       }
 
+      // Bag multiplicity.
       case BagMultiplicityOperation(map, key, otpe) => {
         val elementType = otpe.getOrElse(Unknown.fresh)
         val keyExpected = Unknown.fresh
@@ -738,6 +789,7 @@ class ExprIR(val program: InoxProgram) extends IR {
         })
       }
 
+      // Bag binary operation.
       case BagBinaryOperation(map1, map2, op, otpe) => {
         val elementType = otpe.getOrElse(Unknown.fresh)
         val mapExpected = Unknown.fresh
@@ -767,7 +819,20 @@ class ExprIR(val program: InoxProgram) extends IR {
 
       //---- Operations on Maps ----//
 
-      case MapConstruction(default, bs, oKeyType, oValueType) => {
+      case MapConstruction(_, Bindings(fs, _), _) if (!fs.isEmpty) => {
+        Constrained.fail(fs.map {
+          (e: Expression) => (expectedArrowBinding, e.pos)
+        })
+      }
+
+      case MapConstruction(default, Bindings(_, bs), optEitherKeyAll) => {
+
+        val (oKeyType, oValueType) = optEitherKeyAll match {
+          case None => (None, None)
+          case Some(Left(t)) => (Some(t), None)
+          case Some(Right((t1, t2))) => (Some(t1), Some(t2))
+        } 
+
         val keyType = oKeyType.getOrElse(Unknown.fresh)
         val valueType = oValueType.getOrElse(Unknown.fresh)
         val defaultFresh = Unknown.fresh
@@ -801,6 +866,7 @@ class ExprIR(val program: InoxProgram) extends IR {
         })
       }
 
+      // Map apply.
       case MapApplyOperation(map, key, otpes) => {
         val (keyType, valueType) = otpes.getOrElse((Unknown.fresh, Unknown.fresh))
         val keyExpected = Unknown.fresh
@@ -817,6 +883,7 @@ class ExprIR(val program: InoxProgram) extends IR {
         })
       }
 
+      // Map updated.
       case MapUpdatedOperation(map, key, value, otpes) => {
         val (keyType, valueType) = otpes.getOrElse((Unknown.fresh, Unknown.fresh))
         val keyExpected = Unknown.fresh
@@ -981,7 +1048,7 @@ class ExprIR(val program: InoxProgram) extends IR {
         }).checkImmediate(
           // Their should be the same number of argument applied than parameters of the function.
           args.length == fd.params.length,
-          "Wrong number of arguments. " + fd.id + " takes " + fd.params.length + " arguments, " + args.length + " were given.",
+          functionArity(fd.id.name, fd.params.length, args.length),
           expr.pos
         ).addConstraints({
           // The types of arguments should be subtype of the type of the parameters.
@@ -1000,7 +1067,7 @@ class ExprIR(val program: InoxProgram) extends IR {
             }).checkImmediate(
               // Their should be the same number of type applied than type parameters of the function.
               tpeArgs.length == fd.tparams.length,
-              "Wrong number of type arguments. " + fd.id + " takes " + fd.tparams.length + "arguments, " + tpeArgs.length + " were given.",
+              functionTypeArity(fd.id.name, fd.tparams.length, tpeArgs.length),
               expr.pos
             )
           }
@@ -1037,7 +1104,7 @@ class ExprIR(val program: InoxProgram) extends IR {
         }).checkImmediate(
           // Their should be the same number of argument applied than parameters of the constructor.
           args.length == cons.fields.length,
-          "Wrong number of arguments. Constructor " + cons.id + " takes " + cons.fields.length + " arguments, " + args.length + " were given.",
+          functionArity(cons.id.name, cons.fields.length, args.length, "Constructor"),
           expr.pos
         ).addConstraints({
           // The types of arguments should be subtypes of the parameters.
@@ -1056,7 +1123,7 @@ class ExprIR(val program: InoxProgram) extends IR {
             }).checkImmediate(
               // Their should be the same number of type applied than type parameters of the function.
               tpeArgs.length == cons.tparams.length,
-              "Wrong number of type arguments. Constructor " + cons.id + " takes " + cons.tparams.length + " type arguments, " + tpeArgs.length + " were given.",
+              functionTypeArity(cons.id.name, cons.tparams.length, tpeArgs.length, "Constructor"),
               expr.pos
             )
           }
@@ -1073,7 +1140,7 @@ class ExprIR(val program: InoxProgram) extends IR {
           case es => trees.Tuple(es)
         }).checkImmediate(
           args.size >= 2,
-          "Tuples should be of length greater or equal to 2.",
+          tupleInsufficientLength,
           expr.pos
         ).addConstraint({
           // This assumes that Tuples are invariant. Is this really the case in Inox ?
@@ -1351,8 +1418,12 @@ class ExprIR(val program: InoxProgram) extends IR {
 
       //---- Others ----//
 
+      case Binding(_, _) => {
+        Constrained.fail(unexpectedBinding, expr.pos)
+      }
+
       case _ => {
-        Constrained.fail("Unknown construct.", expr.pos)
+        Constrained.fail(unknownConstruct, expr.pos)
       } 
     }
   }

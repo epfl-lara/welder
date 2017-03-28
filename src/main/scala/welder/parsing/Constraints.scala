@@ -149,6 +149,7 @@ trait Constraints {
 
   object Constrained {
     def fail(error: String, location: Position) = Unsatifiable(Seq(ErrorLocation(error, location)))
+    def fail(errors: Seq[(String, Position)]) = Unsatifiable(errors.map({ case (error, location) => ErrorLocation(error, location)}))
     def pure[A](x: A): Constrained[A] = WithConstraints((u: Unifier) => x, Seq())
     def withUnifier[A](f: Unifier => A) = WithConstraints(f, Seq())
 

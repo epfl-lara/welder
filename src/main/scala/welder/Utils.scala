@@ -46,6 +46,21 @@ object Utils {
     }
   }
 
+  def plural(n: Int, s: String, p: String): String = {
+    if (n == 1) s else p
+  }
+
+  def classify[A, B, C](xs: Seq[A])(f: A => Either[B, C]): (Seq[B], Seq[C]) = {
+    val mapped = xs.map(f)
+    val lefts = mapped.collect {
+      case Left(x) => x
+    }
+    val rights = mapped.collect {
+      case Right(x) => x
+    }
+    (lefts, rights)
+  }
+
   def toFraction(string: String): (BigInt, BigInt) = {
     val parts = string.split('.')
 
