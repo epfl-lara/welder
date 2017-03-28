@@ -1,6 +1,8 @@
 package welder
 package parsing
 
+import scala.util.parsing.input._
+
 /** Contains description of (type-checking) constraints and
  *  and constrained values.
  */
@@ -12,12 +14,12 @@ trait Constraints {
   import trees.Type
 
   /** Represents a meta type-parameter. */
-  case class Unknown(val param: BigInt) extends Type {
-    override def toString: String = "MetaParam(" + param + ")"
+  case class Unknown(val param: BigInt) extends Type with Positional {
+    override def toString: String = pos + "@MetaParam(" + param + ")"
   }
 
   object Unknown {
-    def fresh: Unknown = Unknown(Unique.fresh)
+    def fresh(implicit position: Position): Unknown = Unknown(Unique.fresh).setPos(position)
   }
 
   object Unique {
@@ -30,7 +32,7 @@ trait Constraints {
     }
   }
 
-  sealed abstract class TypeClass {
+  sealed abstract class TypeClass extends Positional {
     def &(that: TypeClass) = (this, that) match {
       case (Bits, _) => Bits
       case (_, Bits) => Bits
@@ -75,28 +77,28 @@ trait Constraints {
 
     def apply(tpe: Type): Type = instantiator.transform(tpe)
     def apply(c: Constraint): Constraint = c match {
-      case Equal(a, b) => Equal(instantiator.transform(a), instantiator.transform(b))
-      case Subtype(a, b) => Subtype(instantiator.transform(a), instantiator.transform(b))
-      case HasClass(a, c) => HasClass(instantiator.transform(a), c)
-      case AtIndexEqual(a, b, idx) => AtIndexEqual(instantiator.transform(a), instantiator.transform(b), idx)
+      case Equal(a, b) => Equal(instantiator.transform(a), instantiator.transform(b)).setPos(c.pos)
+      case Subtype(a, b) => Subtype(instantiator.transform(a), instantiator.transform(b)).setPos(c.pos)
+      case HasClass(a, cl) => HasClass(instantiator.transform(a), cl).setPos(c.pos)
+      case AtIndexEqual(a, b, idx) => AtIndexEqual(instantiator.transform(a), instantiator.transform(b), idx).setPos(c.pos)
     }
   }
 
   /** Constraint on type(s). */
-  abstract class Constraint(val types: Seq[Type])
+  abstract class Constraint(val types: Seq[Type]) extends Positional
   case class Equal(a: Type, b: Type) extends Constraint(Seq(a, b))
   case class Subtype(sub: Type, sup: Type) extends Constraint(Seq(sub, sup))
   case class HasClass(a: Type, c: TypeClass) extends Constraint(Seq(a))
   case class AtIndexEqual(tup: Type, mem: Type, idx: Int) extends Constraint(Seq(tup, mem))
 
   object Constraint {
-    def equal(a: Type, b: Type): Constraint = Equal(a, b)
-    def subtype(a: Type, b: Type): Constraint = Subtype(a, b)
-    def isNumeric(a: Type): Constraint = HasClass(a, Numeric)
-    def isIntegral(a: Type): Constraint = HasClass(a, Integral)
-    def isComparable(a: Type): Constraint = HasClass(a, Comparable)
-    def isBitVector(a: Type): Constraint = HasClass(a, Bits)
-    def atIndex(tup: Type, mem: Type, idx: Int) = AtIndexEqual(tup, mem, idx)
+    def equal(a: Type, b: Type)(implicit position: Position): Constraint = Equal(a, b).setPos(position)
+    def subtype(a: Type, b: Type)(implicit position: Position): Constraint = Subtype(a, b).setPos(position)
+    def isNumeric(a: Type)(implicit position: Position): Constraint = HasClass(a, Numeric.setPos(position)).setPos(position)
+    def isIntegral(a: Type)(implicit position: Position): Constraint = HasClass(a, Integral.setPos(position)).setPos(position)
+    def isComparable(a: Type)(implicit position: Position): Constraint = HasClass(a, Comparable.setPos(position)).setPos(position)
+    def isBitVector(a: Type)(implicit position: Position): Constraint = HasClass(a, Bits.setPos(position)).setPos(position)
+    def atIndex(tup: Type, mem: Type, idx: Int)(implicit position: Position) = AtIndexEqual(tup, mem, idx).setPos(position)
   }
 
   /** Represents a set of constraints with a value.
@@ -112,12 +114,14 @@ trait Constraints {
 
     def map[B](f: A => B): Constrained[B] = this match {
       case WithConstraints(v, cs) => WithConstraints(v andThen f, cs)
-      case Unsatifiable => Unsatifiable
+      case Unsatifiable(es) => Unsatifiable(es)
     }
 
     def combine[B, C](that: Constrained[B])(f: (A, B) => C): Constrained[C] = (this, that) match {
       case (WithConstraints(vA, csA), WithConstraints(vB, csB)) => WithConstraints((u: Unifier) => f(vA(u), vB(u)), csA ++ csB)
-      case (_, _) => Unsatifiable 
+      case (Unsatifiable(es), Unsatifiable(fs)) => Unsatifiable(es ++ fs)
+      case (Unsatifiable(es), _) => Unsatifiable(es)
+      case (_, Unsatifiable(fs)) => Unsatifiable(fs)
     }
 
     def app[B, C](that: Constrained[B])(implicit ev: A <:< (B => C)): Constrained[C] =
@@ -125,25 +129,26 @@ trait Constraints {
 
     def get(implicit unifier: Unifier): A = this match {
       case WithConstraints(vA, cs) => vA(unifier)
-      case Unsatifiable => throw new Exception("Unsatifiable.get")
+      case Unsatifiable(_) => throw new Exception("Unsatifiable.get")
     }
 
     def addConstraint(constraint: => Constraint): Constrained[A] = addConstraints(Seq(constraint))
 
     def addConstraints(constraints: => Seq[Constraint]): Constrained[A] = this match {
       case WithConstraints(vA, cs) => WithConstraints(vA, constraints ++ cs)
-      case Unsatifiable => Unsatifiable
+      case Unsatifiable(es) => Unsatifiable(es)
     }
-    def checkImmediate(condition: => Boolean): Constrained[A] = this match {
-      case Unsatifiable => Unsatifiable
-      case _ => if (condition) this else Unsatifiable
+    def checkImmediate(condition: Boolean, error: String, location: Position): Constrained[A] = this match {
+      case Unsatifiable(es) if (!condition) => Unsatifiable(es :+ ErrorLocation(error, location))
+      case WithConstraints(_, _) if (!condition) => Unsatifiable(Seq(ErrorLocation(error, location)))
+      case _ => this
     }
   }
-  case object Unsatifiable extends Constrained[Nothing]
+  case class Unsatifiable(errors: Seq[ErrorLocation]) extends Constrained[Nothing]
   case class WithConstraints[A](value: Unifier => A, constraints: Seq[Constraint]) extends Constrained[A]
 
   object Constrained {
-    val fail = Unsatifiable
+    def fail(error: String, location: Position) = Unsatifiable(Seq(ErrorLocation(error, location)))
     def pure[A](x: A): Constrained[A] = WithConstraints((u: Unifier) => x, Seq())
     def withUnifier[A](f: Unifier => A) = WithConstraints(f, Seq())
 

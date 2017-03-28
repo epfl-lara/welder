@@ -1,7 +1,11 @@
 package welder
 package parsing
 
+import scala.util.parsing.input._
+
 import inox.InoxProgram
+
+class ConstraintException(message: String, location: Position) extends Exception(ErrorLocation(message, location).toString)
 
 class SimpleConstraintSolver(val program: InoxProgram) {
 
@@ -158,8 +162,8 @@ class SimpleConstraintSolver(val program: InoxProgram) {
 
         // We reintroduce those bounds has constraints.
         case Bounds(ls, us) => {
-          remaining ++= ls.map(Subtype(_, t))
-          remaining ++= us.map(Subtype(t, _))
+          remaining ++= ls.map(Subtype(_, t).setPos(u.pos))
+          remaining ++= us.map(Subtype(t, _).setPos(u.pos))
         }
 
         // We remove the bounds of the variable.
@@ -180,7 +184,7 @@ class SimpleConstraintSolver(val program: InoxProgram) {
       typeClasses.get(u).foreach { (c: TypeClass) =>
 
         // We reintroduce this constraints.
-        remaining +:= HasClass(t, c)
+        remaining +:= HasClass(t, c).setPos(c.pos)
 
         // Remove the entry for the variable.
         typeClasses -= u
@@ -237,6 +241,7 @@ class SimpleConstraintSolver(val program: InoxProgram) {
     }
 
     def handle(constraint: Constraint) {
+
       constraint match {
         case Equal(a, b) => (a, b) match {
           case _ if (a == b) => ()
@@ -246,7 +251,7 @@ class SimpleConstraintSolver(val program: InoxProgram) {
           case (u: Unknown, t) => {
             val checker = new OccurChecker(u)
             if (checker(t)) {
-              throw new Exception("Occur check.")
+              throw new ConstraintException("Occur check.", constraint.pos)
             }
 
             substitute(u, t)
@@ -254,32 +259,32 @@ class SimpleConstraintSolver(val program: InoxProgram) {
           case (t, u: Unknown) => {
             val checker = new OccurChecker(u)
             if (checker(t)) {
-              throw new Exception("Occur check.")
+              throw new ConstraintException("Occur check.", constraint.pos)
             }
 
             substitute(u, t)
           }
           case (FunctionType(fas, ta), FunctionType(fbs, tb)) if (fbs.length == fas.length) => {
-            remaining ++= fas.zip(fbs).map({ case (fa, fb) => Equal(fa, fb) })
-            remaining +:= Equal(ta, tb)
+            remaining ++= fas.zip(fbs).map({ case (fa, fb) => Equal(fa, fb).setPos(constraint.pos) })
+            remaining +:= Equal(ta, tb).setPos(constraint.pos)
           } 
           case (TupleType(tas), TupleType(tbs)) if (tas.length == tbs.length) => {
-            remaining ++= tas.zip(tbs).map({ case (ta, tb) => Equal(ta, tb) })
+            remaining ++= tas.zip(tbs).map({ case (ta, tb) => Equal(ta, tb).setPos(constraint.pos) })
           }
           case (ADTType(ida, tas), ADTType(idb, tbs)) if (ida == idb && tas.length == tbs.length) => {
-            remaining ++= tas.zip(tbs).map({ case (ta, tb) => Equal(ta, tb) })
+            remaining ++= tas.zip(tbs).map({ case (ta, tb) => Equal(ta, tb).setPos(constraint.pos) })
           }
           case (SetType(ta), SetType(tb)) => {
-            remaining +:= Equal(ta, tb)
+            remaining +:= Equal(ta, tb).setPos(constraint.pos)
           }
           case (BagType(ta), BagType(tb)) => {
-            remaining +:= Equal(ta, tb)
+            remaining +:= Equal(ta, tb).setPos(constraint.pos)
           }
           case (MapType(fa, ta), MapType(fb, tb)) => {
-            remaining +:= Equal(fa, fb)
-            remaining +:= Equal(ta, tb)
+            remaining +:= Equal(fa, fb).setPos(constraint.pos)
+            remaining +:= Equal(ta, tb).setPos(constraint.pos)
           }
-          case _ => throw new Exception("Types incompatible: " + a + ", " + b)
+          case _ => throw new ConstraintException("Types incompatible: " + a + ", " + b, constraint.pos)
         }
         case Subtype(a, b) => (a, b) match {
           case _ if (a == b) => ()
@@ -293,12 +298,12 @@ class SimpleConstraintSolver(val program: InoxProgram) {
           case (u: Unknown, _) => {
             val checker = new OccurChecker(u)
             if (checker(b)) {
-              throw new Exception("Occur check.")
+              throw new ConstraintException("Occur check.", constraint.pos)
             }
 
             if (isSurelyEnd(b, false)) {
               // If b is at the bottom of the subtyping chain...
-              remaining +:= Equal(a, b)
+              remaining +:= Equal(a, b).setPos(constraint.pos)
             }
             else {
               val Bounds(ls, us) = bounds.get(u).getOrElse(Bounds(Set(), Set()))
@@ -310,12 +315,12 @@ class SimpleConstraintSolver(val program: InoxProgram) {
           case (_, u: Unknown) => {
             val checker = new OccurChecker(u)
             if (checker(a)) {
-              throw new Exception("Occur check.")
+              throw new ConstraintException("Occur check.", constraint.pos)
             }
 
             if (isSurelyEnd(a, true)) {
               // If a is at the top of the subtyping chain...
-              remaining +:= Equal(a, b)
+              remaining +:= Equal(a, b).setPos(constraint.pos)
             }
             else {
               val Bounds(ls, us) = bounds.get(u).getOrElse(Bounds(Set(), Set()))
@@ -334,11 +339,11 @@ class SimpleConstraintSolver(val program: InoxProgram) {
             }
 
             if (adtDef1 != adtDef2 && adtDef1.root(symbols) != adtDef2) {
-              throw new Exception("Type " + a + " can not be a subtype of " + b)
+              throw new ConstraintException("Type " + a + " can not be a subtype of " + b, constraint.pos)
             }
 
             if (t1s.length != t2s.length || t2s.length != adtDef1.tparams.length) {
-              throw new Exception("Type " + a + " can not be a subtype of " + b)
+              throw new ConstraintException("Type " + a + " can not be a subtype of " + b, constraint.pos)
             }
 
             assert(adtDef1.tparams.length == adtDef2.tparams.length)
@@ -351,65 +356,65 @@ class SimpleConstraintSolver(val program: InoxProgram) {
             adtDef1.tparams.zip(t1s.zip(t2s)).foreach {
               case (tpDef, (t1, t2)) => {
                 if (tpDef.tp.isCovariant) {
-                  remaining +:= Subtype(t1, t2)
+                  remaining +:= Subtype(t1, t2).setPos(constraint.pos)
                 }
                 if (tpDef.tp.isContravariant) {
-                  remaining +:= Subtype(t2, t1)
+                  remaining +:= Subtype(t2, t1).setPos(constraint.pos)
                 }
                 if (tpDef.tp.isInvariant) {
-                  remaining +:= Equal(t1, t2)
+                  remaining +:= Equal(t1, t2).setPos(constraint.pos)
                 }
               }
             }
           }
           case (TupleType(tas), TupleType(tbs)) if (tas.length == tbs.length) => {
             tas.zip(tbs).foreach {
-              case (ta, tb) => remaining +:= Subtype(ta, tb)
+              case (ta, tb) => remaining +:= Subtype(ta, tb).setPos(constraint.pos)
             }
           }
           case (SetType(ta), SetType(tb)) => {
-            remaining +:= Equal(ta, tb)  // Sets are invariant.
+            remaining +:= Equal(ta, tb).setPos(constraint.pos)  // Sets are invariant.
           }
           case (BagType(ta), BagType(tb)) => {
-            remaining +:= Equal(ta, tb) // Bags are invariant.
+            remaining +:= Equal(ta, tb).setPos(constraint.pos) // Bags are invariant.
           }
           case (MapType(fa, ta), MapType(fb, tb)) => {
-            remaining +:= Equal(fa, fb) // Maps are invariant.
-            remaining +:= Equal(ta, tb)
+            remaining +:= Equal(fa, fb).setPos(constraint.pos) // Maps are invariant.
+            remaining +:= Equal(ta, tb).setPos(constraint.pos)
           }
           case (FunctionType(fas, ta), FunctionType(fbs, tb)) if (fas.length == fbs.length) => {
             fas.zip(fbs).foreach {
-              case (fa, fb) => remaining +:= Subtype(fb, fa)
+              case (fa, fb) => remaining +:= Subtype(fb, fa).setPos(constraint.pos)
             }
-            remaining +:= Subtype(ta, tb)
+            remaining +:= Subtype(ta, tb).setPos(constraint.pos)
           }
           case (NAryType(Seq(), _), _) => {
-            remaining +:= Equal(a, b)
+            remaining +:= Equal(a, b).setPos(constraint.pos)
           }
           case (_, NAryType(Seq(), _)) => {
-            remaining +:= Equal(a, b)
+            remaining +:= Equal(a, b).setPos(constraint.pos)
           }
           case _ => {
-            throw new Exception("Type " + a + " can not be a subtype of " + b)
+            throw new ConstraintException("Type " + a + " can not be a subtype of " + b, constraint.pos)
           }
         }
         case AtIndexEqual(a, b, i) => a match {
           case u: Unknown => {
             typeClasses.get(u).foreach {
-              case c => throw new Exception("Type " + a + " can not be both a tuple and " + className(c))
+              case c => throw new ConstraintException("Type " + a + " can not be both a tuple and " + className(c), constraint.pos)
             }
             tupleConstraints += (u -> (tupleConstraints.get(u).getOrElse(Set()) + constraint))
           }
           case TupleType(tps) => {
             if (tps.length >= i) {
-              remaining +:= Equal(tps(i - 1), b)
+              remaining +:= Equal(tps(i - 1), b).setPos(constraint.pos)
             }
             else {
-              throw new Exception("Type " + a + " does not have a field at index " + i)
+              throw new ConstraintException("Type " + a + " does not have a field at index " + i, constraint.pos)
             }
           }
           case _ => {
-            throw new Exception("Type " + a + " is not a tuple.")
+            throw new ConstraintException("Type " + a + " is not a tuple.", constraint.pos)
           }
         }
         case HasClass(a, c) => {
@@ -418,14 +423,14 @@ class SimpleConstraintSolver(val program: InoxProgram) {
               bounds.get(u).foreach {
                 case Bounds(ls, us) => {
                   // Member of type classes are flat.
-                  remaining ++= ls.map(Equal(u, _))
-                  remaining ++= us.map(Equal(u, _))
+                  remaining ++= ls.map(Equal(u, _).setPos(constraint.pos))
+                  remaining ++= us.map(Equal(u, _).setPos(constraint.pos))
                 }
 
                 bounds -= u
               }
               tupleConstraints.get(u).foreach {
-                case _ => throw new Exception("Type " + a + " can not be both a tuple and " + className(c))
+                case _ => throw new ConstraintException("Type " + a + " can not be both a tuple and " + className(c), constraint.pos)
               }
               typeClasses += (u -> { typeClasses.get(u) match {
                 case None => c
@@ -433,7 +438,7 @@ class SimpleConstraintSolver(val program: InoxProgram) {
               }})
             }
             case _ if c.hasInstance(a) => ()
-            case _ => throw new Exception("Type " + a + " is not " + className(c))
+            case _ => throw new ConstraintException("Type " + a + " is not " + className(c), constraint.pos)
           }
         }
       }
@@ -448,8 +453,8 @@ class SimpleConstraintSolver(val program: InoxProgram) {
 
       // Set the default instance for classes.
       typeClasses.foreach({
-        case (t, Integral | Numeric) => remaining +:= Equal(t, IntegerType)
-        case (t, Bits) => remaining +:= Equal(t, Int32Type)
+        case (t, Integral | Numeric) => remaining +:= Equal(t, IntegerType).setPos(t.pos)
+        case (t, Bits) => remaining +:= Equal(t, Int32Type).setPos(t.pos)
         case _ => ()
       })
 
@@ -478,23 +483,23 @@ class SimpleConstraintSolver(val program: InoxProgram) {
           if (!us.isEmpty && uInUps.isEmpty /* && !inLowers.contains(u) */) {
             val bound = symbols.greatestLowerBound(us.toSeq)
             if (bound == Untyped) {
-              throw new Exception("The following types are incompatible: " + us)
+              throw new ConstraintException("The following types are incompatible: " + us, u.pos)
             }
-            remaining +:= Equal(u, bound)
+            remaining +:= Equal(u, bound).setPos(u.pos)
           }
           else if (!ls.isEmpty && uInLws.isEmpty /* && !inUppers.contains(u) */) {
             val bound = symbols.leastUpperBound(ls.toSeq)
             if (bound == Untyped) {
-              throw new Exception("The following types are incompatible: " + ls)
+              throw new ConstraintException("The following types are incompatible: " + ls, u.pos)
             }
-            remaining +:= Equal(u, bound)
+            remaining +:= Equal(u, bound).setPos(u.pos)
           }
         }
       })
     }
 
     if (!unknowns.isEmpty) {
-      throw new Exception("Ambiguity. Try using type annotations.")
+      throw new ConstraintException("Ambiguity. Try using type annotations.", unknowns.head.pos)
     }
 
     new Unifier(substitutions)
