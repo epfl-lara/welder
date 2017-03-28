@@ -139,6 +139,7 @@ class ExpressionParser(program: InoxProgram) extends TypeParser(program) { self 
     case Keyword("false") => BooleanLiteral(false)
     case StringLit(s) => StringLiteral(s)
     case NumericLit(n) => NumericLiteral(n)
+    case CharLit(c) => CharLiteral(c)
     case RawExpr(e) => EmbeddedExpr(e)
   }) ^^ (Literal(_)))
 

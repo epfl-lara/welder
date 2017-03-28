@@ -44,6 +44,7 @@ class InoxLexer(val program: InoxProgram) extends StdLexical with StringContextL
   )
   val operators = (opTable.map(_._1).flatten ++ unaryOps).distinct
 
+  case class CharLit(char: Char) extends Token { def chars = char.toString }
   case class Parenthesis(parenthesis: Char) extends Token { def chars = parenthesis.toString }
   case class Punctuation(punctuation: Char) extends Token { def chars = punctuation.toString }
   case class Quantifier(quantifier: String) extends Token { def chars = quantifier }
@@ -52,7 +53,7 @@ class InoxLexer(val program: InoxProgram) extends StdLexical with StringContextL
   case class RawExpr(expr: Expr) extends Token { def chars = expr.toString }
   case class RawType(tpe: Type) extends Token { def chars = tpe.toString }
 
-  override def token: Parser[Token] = number | operator | keywords | punctuation | parens | quantifier | super.token
+  override def token: Parser[Token] = char | number | operator | keywords | punctuation | parens | quantifier | super.token
 
   val keywords = acceptSeq("=>") ^^^ Keyword("=>") |
                  ('.' <~ not(whitespaceChar)) ^^^ Keyword(".") |
@@ -73,6 +74,10 @@ class InoxLexer(val program: InoxProgram) extends StdLexical with StringContextL
   val number = rep1(digit) ~ opt('.' ~> rep1(digit)) ^^ {
     case ds ~ None     => NumericLit(ds.mkString)
     case ds ~ Some(rs) => NumericLit(ds.mkString + "." + rs.mkString)
+  }
+
+  val char = '`' ~> commit(elem("Character", (x: Char) => true) <~ '`') ^^ {
+    CharLit(_)
   }
 
   val quantifier: Parser[Token] = '∀' ^^^ Quantifier("forall") |
