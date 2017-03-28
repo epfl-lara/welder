@@ -63,7 +63,7 @@ trait TypeIR extends IR {
     }
   })
 
-  import Utils.{either, traverse}
+  import Utils.{either, traverse, plural}
 
   def toInoxType(expr: Expression): Either[Seq[ErrorLocation], trees.Type] = expr match {
 
@@ -93,7 +93,9 @@ trait TypeIR extends IR {
           case Some((n, cons)) => if (n == irs.length) {
             Right(cons)
           } else {
-            Left(Seq(ErrorLocation("Type constructor " + value + " takes " + n + " argument(s), " + irs.length + " were given.", l.pos)))
+            Left(Seq(ErrorLocation("Type constructor " + value + " takes " +
+              n + " " + plural(n, "argument", "arguments") + ", " +
+              irs.length + " " + plural(irs.length, "was", "were") + " given.", l.pos)))
           }
         },
         traverse(irs.map(toInoxType(_))).left.map(_.flatten)
