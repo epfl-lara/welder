@@ -84,6 +84,8 @@ class ExprIR(val program: InoxProgram) extends IR {
   lazy val warningSetOrBag: String = "Not all elements are of the same shape. " +
     "Use bindings of the form `key -> value` for bag literals and naked values for set literals."
 
+  lazy val wrongNumberOfArguments: String = "Wrong number of arguments."
+
   //---- Extractors ----//
 
   object TupleField {
@@ -568,7 +570,7 @@ class ExprIR(val program: InoxProgram) extends IR {
         }).map({
           case Seq(a, b) => op(a, b)
         }).checkImmediate(
-          args.length == 2, "Wrong number of arguments.", expr.pos
+          args.length == 2, wrongNumberOfArguments, expr.pos
         ).addConstraint({
           Constraint.isNumeric(expected)
         })
@@ -582,7 +584,7 @@ class ExprIR(val program: InoxProgram) extends IR {
         }).map({
           case Seq(a, b) => op(a, b)
         }).checkImmediate(
-          args.length == 2, "Wrong number of arguments.", expr.pos
+          args.length == 2, wrongNumberOfArguments, expr.pos
         ).addConstraint({
           Constraint.isIntegral(expected)
         })
@@ -605,7 +607,7 @@ class ExprIR(val program: InoxProgram) extends IR {
         }).map({
           case Seq(a, b) => op(a, b)
         }).checkImmediate(
-          args.length == 2, "Wrong number of arguments.", expr.pos
+          args.length == 2, wrongNumberOfArguments, expr.pos
         ).addConstraint({
           Constraint.isComparable(expectedArg)
         }).addConstraint({
@@ -620,7 +622,7 @@ class ExprIR(val program: InoxProgram) extends IR {
         }).map({
           case Seq(a, b) => op(a, b)
         }).checkImmediate(
-          args.length == 2, "Wrong number of arguments.", expr.pos
+          args.length == 2, wrongNumberOfArguments, expr.pos
         ).addConstraint({
           Constraint.isBitVector(expected)
         })
@@ -636,7 +638,7 @@ class ExprIR(val program: InoxProgram) extends IR {
         }).map({
           case Seq(a, b) => trees.Equals(a, b)
         }).checkImmediate(
-          args.length == 2, "Wrong number of arguments.", expr.pos
+          args.length == 2, wrongNumberOfArguments, expr.pos
         ).addConstraint({
           Constraint.equal(expected, trees.BooleanType)
         })
@@ -652,7 +654,7 @@ class ExprIR(val program: InoxProgram) extends IR {
         }).map({
           case Seq(a, b) => trees.Not(trees.Equals(a, b))
         }).checkImmediate(
-          args.length == 2, "Wrong number of arguments.", expr.pos
+          args.length == 2, wrongNumberOfArguments, expr.pos
         ).addConstraint({
           Constraint.equal(expected, trees.BooleanType)
         })
@@ -666,7 +668,7 @@ class ExprIR(val program: InoxProgram) extends IR {
         }).map({
           case Seq(a, b) => op(a, b)
         }).checkImmediate(
-          args.length == 2, "Wrong number of arguments.", expr.pos
+          args.length == 2, wrongNumberOfArguments, expr.pos
         ).addConstraint({
           Constraint.equal(expected, trees.BooleanType)
         })
