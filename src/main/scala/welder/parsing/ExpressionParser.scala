@@ -263,13 +263,14 @@ class ExpressionParser(program: InoxProgram) extends TypeParser(program) { self 
 
   lazy val operatorExpr: Parser[Expression] = {
 
-    def withPrio(oneOp: Parser[(Expression, Expression) => Expression], lessPrio: Parser[Expression], assoc: Assoc) = {
+    def handleBinary(oneOp: Parser[String], lessPrio: Parser[Expression], assoc: Assoc) = {
+      def toBinary(op: String): (Expression, Expression) => Expression =
+        (a: Expression, b: Expression) => Operation(op, Seq(a, b))
+
+      val bin = oneOp.map(toBinary(_))
       assoc match {
-        case LeftAssoc => {
-          chainl1(lessPrio, oneOp)
-        }
         case RightAssoc => {
-          lessPrio ~ rep(oneOp ~ commit(lessPrio)) ^^ {
+          lessPrio ~ rep(bin ~ commit(lessPrio)) ^^ {
             case first ~ opsAndExprs => {
               if (opsAndExprs.isEmpty) {
                 first
@@ -286,6 +287,16 @@ class ExpressionParser(program: InoxProgram) extends TypeParser(program) { self 
             }
           }
         }
+        case _ => {
+          chainl1(lessPrio, bin)
+        }
+      }
+    }
+
+    def handleNAry(op: String, oneOp: Parser[String], lessPrio: Parser[Expression]) = {
+      rep1sep(lessPrio, oneOp) ^^ {
+        case Seq(x) => x
+        case xs => Operation(op, xs)
       }
     }
 
@@ -294,12 +305,18 @@ class ExpressionParser(program: InoxProgram) extends TypeParser(program) { self 
     opTable.foldLeft(zero) {
       case (lessPrio, (ops, assoc)) => {
         val oneOp = ops.map({
-          case op => elem(Operator(op)) ^^^ { (a: Expression, b: Expression) => Operation(op, Seq(a, b)) }
+          case op => elem(Operator(op)) ^^^ { op }
         }).reduce(_ | _) withFailureMessage {
           (p: Position) => withPos("Unknown operator.", p)
         }
 
-        withPrio(oneOp, lessPrio, assoc)
+        assoc match {
+          case RightAssoc | LeftAssoc => handleBinary(oneOp, lessPrio, assoc)
+          case AnyAssoc => {
+            assert(ops.length == 1)  // TODO: Encode this in the types, e.g. in Assoc.
+            handleNAry(ops.head, oneOp, lessPrio)
+          }
+        }
       }
     }
   }

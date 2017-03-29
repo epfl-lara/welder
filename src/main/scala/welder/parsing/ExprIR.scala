@@ -187,8 +187,14 @@ class ExprIR(val program: InoxProgram) extends IR {
   object BooleanBinOp {
     def unapply(string: String): Option[(trees.Expr, trees.Expr) => trees.Expr] = string match {
       case "==>" => Some({ (lhs: trees.Expr, rhs: trees.Expr) => trees.Implies(lhs, rhs) })
-      case "&&" => Some({ (lhs: trees.Expr, rhs: trees.Expr) => trees.And(lhs, rhs) })
-      case "||" => Some({ (lhs: trees.Expr, rhs: trees.Expr) => trees.Or(lhs, rhs) })
+      case _ => None
+    }
+  }
+
+object BooleanNAryOp {
+    def unapply(string: String): Option[Seq[trees.Expr] => trees.Expr] = string match {
+      case "&&" => Some({ (exprs: Seq[trees.Expr]) => trees.And(exprs) })
+      case "||" => Some({ (exprs: Seq[trees.Expr]) => trees.Or(exprs) })
       case _ => None
     }
   }
@@ -667,7 +673,7 @@ class ExprIR(val program: InoxProgram) extends IR {
         })
       }
 
-      // Binary operation defined on comparable types.
+      // Binary operations defined on booleans.
       case Operation(BooleanBinOp(op), args) => {
         
         Constrained.sequence({
@@ -676,6 +682,20 @@ class ExprIR(val program: InoxProgram) extends IR {
           case Seq(a, b) => op(a, b)
         }).checkImmediate(
           args.length == 2, wrongNumberOfArguments, expr.pos
+        ).addConstraint({
+          Constraint.equal(expected, trees.BooleanType)
+        })
+      }
+
+      // NAry operations defined on booleans.
+      case Operation(BooleanNAryOp(op), args) => {
+        
+        Constrained.sequence({
+          args.map(typeCheck(_, expected))
+        }).map(
+          op(_)
+        ).checkImmediate(
+          args.length >= 2, wrongNumberOfArguments, expr.pos
         ).addConstraint({
           Constraint.equal(expected, trees.BooleanType)
         })

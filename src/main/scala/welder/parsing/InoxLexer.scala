@@ -40,9 +40,9 @@ class InoxLexer(val program: InoxProgram) extends StdLexical with StringContextL
 
     Seq("|") -> LeftAssoc,
 
-    Seq("&&") -> LeftAssoc,
+    Seq("&&") -> AnyAssoc,
 
-    Seq("||") -> LeftAssoc,
+    Seq("||") -> AnyAssoc,
 
     Seq("==>") -> RightAssoc,
 
