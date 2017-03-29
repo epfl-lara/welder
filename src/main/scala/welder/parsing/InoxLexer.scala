@@ -15,40 +15,9 @@ class InoxLexer(val program: InoxProgram) extends StdLexical with StringContextL
 
   import program.trees._
 
-  val unaryOps: Seq[String] = Seq("-", "+", "!", "~")
-  val opTable: Seq[(Seq[String], Assoc)] = Seq(
-
-    Seq("*", "/", "%", "mod") -> LeftAssoc,
-
-    Seq("+", "-") -> LeftAssoc,
-
-    Seq("++") -> LeftAssoc,
-
-    Seq("∪", "∩", "∖") -> LeftAssoc,
-
-    Seq("⊆", "∈") -> LeftAssoc,
-
-    Seq("<<", ">>", ">>>") -> LeftAssoc,
-
-    Seq(">=", "<=", ">", "<") -> LeftAssoc,
-
-    Seq("==", "!=") -> LeftAssoc,
-
-    Seq("&") -> LeftAssoc,
-
-    Seq("^") -> LeftAssoc,
-
-    Seq("|") -> LeftAssoc,
-
-    Seq("&&") -> AnyAssoc,
-
-    Seq("||") -> AnyAssoc,
-
-    Seq("==>") -> RightAssoc,
-
-    Seq("->") -> RightAssoc
-  )
-  val operators = (opTable.map(_._1).flatten ++ unaryOps).distinct
+  val unaryOps: Seq[String] = Operators.unaries
+  val opTable: Seq[Level] = Operators.binaries 
+  val operators = (opTable.flatMap(_.ops) ++ unaryOps).distinct
 
   case class CharLit(char: Char) extends Token { def chars = char.toString }
   case class Parenthesis(parenthesis: Char) extends Token { def chars = parenthesis.toString }

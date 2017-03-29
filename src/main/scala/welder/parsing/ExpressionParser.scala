@@ -263,58 +263,51 @@ class ExpressionParser(program: InoxProgram) extends TypeParser(program) { self 
 
   lazy val operatorExpr: Parser[Expression] = {
 
-    def handleBinary(oneOp: Parser[String], lessPrio: Parser[Expression], assoc: Assoc) = {
-      def toBinary(op: String): (Expression, Expression) => Expression =
-        (a: Expression, b: Expression) => Operation(op, Seq(a, b))
+    def operator(op: String) = (elem(Operator(op)) ^^^ { op }) withFailureMessage {
+      (p: Position) => withPos("Unknown operator.", p)
+    }
 
-      val bin = oneOp.map(toBinary(_))
-      assoc match {
-        case RightAssoc => {
-          lessPrio ~ rep(bin ~ commit(lessPrio)) ^^ {
-            case first ~ opsAndExprs => {
-              if (opsAndExprs.isEmpty) {
-                first
-              }
-              else {
-                val (ops, exprs) = opsAndExprs.map({ case a ~ b => (a, b) }).unzip
-                val exprsAndOps = (first +: exprs).zip(ops)
-                val last = exprs.last
+    def oneOf(ops: Seq[String]) = ops.map(operator(_)).reduce(_ | _) withFailureMessage {
+      (p: Position) => withPos("Unknown operator.", p)
+    }
 
-                exprsAndOps.foldRight(last) {
-                  case ((expr, op), acc) => op(expr, acc)
+    def toBinary(op: String): (Expression, Expression) => Expression =
+      (a: Expression, b: Expression) => Operation(op, Seq(a, b))
+
+    val zero = nonOperatorExpr
+
+    Operators.binaries.foldLeft(zero) {
+      case (morePrio, level) => {
+
+        level match {
+          case RightAssoc(ops) => {
+            val bin = oneOf(ops).map(toBinary(_))
+            morePrio ~ rep(bin ~ commit(morePrio)) ^^ {
+              case first ~ opsAndExprs => {
+                if (opsAndExprs.isEmpty) {
+                  first
+                }
+                else {
+                  val (ops, exprs) = opsAndExprs.map({ case a ~ b => (a, b) }).unzip
+                  val exprsAndOps = (first +: exprs).zip(ops)
+                  val last = exprs.last
+
+                  exprsAndOps.foldRight(last) {
+                    case ((expr, f), acc) => f(expr, acc)
+                  }
                 }
               }
             }
           }
-        }
-        case _ => {
-          chainl1(lessPrio, bin)
-        }
-      }
-    }
-
-    def handleNAry(op: String, oneOp: Parser[String], lessPrio: Parser[Expression]) = {
-      rep1sep(lessPrio, oneOp) ^^ {
-        case Seq(x) => x
-        case xs => Operation(op, xs)
-      }
-    }
-
-    val zero = nonOperatorExpr
-
-    opTable.foldLeft(zero) {
-      case (lessPrio, (ops, assoc)) => {
-        val oneOp = ops.map({
-          case op => elem(Operator(op)) ^^^ { op }
-        }).reduce(_ | _) withFailureMessage {
-          (p: Position) => withPos("Unknown operator.", p)
-        }
-
-        assoc match {
-          case RightAssoc | LeftAssoc => handleBinary(oneOp, lessPrio, assoc)
-          case AnyAssoc => {
-            assert(ops.length == 1)  // TODO: Encode this in the types, e.g. in Assoc.
-            handleNAry(ops.head, oneOp, lessPrio)
+          case LeftAssoc(ops) => {
+            val bin = oneOf(ops).map(toBinary(_))
+            chainl1(morePrio, bin)
+          }
+          case AnyAssoc(op) => {
+            rep1sep(morePrio, operator(op)) ^^ {
+              case Seq(x) => x
+              case xs => Operation(op, xs)
+            }
           }
         }
       }
