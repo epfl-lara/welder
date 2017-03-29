@@ -28,18 +28,20 @@ class InoxLexer(val program: InoxProgram) extends StdLexical with StringContextL
   case class RawExpr(expr: Expr) extends Token { def chars = expr.toString }
   case class RawType(tpe: Type) extends Token { def chars = tpe.toString }
 
-  override def token: Parser[Token] = char | number | operator | keywords | punctuation | parens | quantifier | super.token
+  override def token: Parser[Token] =
+    char | number | operator | keywords | punctuation | parens | quantifier | super.token
 
-  val keywords = acceptSeq("=>") ^^^ Keyword("=>") |
-                 ('.' <~ not(whitespaceChar)) ^^^ Keyword(".") |
-                 acceptSeq("true") <~ not(identChar | digit) ^^^ Keyword("true") |
-                 acceptSeq("false") <~ not(identChar | digit) ^^^ Keyword("false") |
-                 acceptSeq("if") <~ not(identChar | digit) ^^^ Keyword("if") |
-                 acceptSeq("else") <~ not(identChar | digit) ^^^ Keyword("else") |
-                 acceptSeq("let") <~ not(identChar | digit) ^^^ Keyword("let") |
-                 acceptSeq("in") <~ not(identChar | digit) ^^^ Keyword("in") |
-                 acceptSeq("assume") <~ not(identChar | digit) ^^^ Keyword("assume") |
-                 acceptSeq("=") ^^^ Keyword("=")
+  val keywords = 
+    acceptSeq("=>") ^^^ Keyword("=>") |
+    ('.' <~ not(whitespaceChar)) ^^^ Keyword(".") |
+    acceptSeq("true") <~ not(identChar | digit) ^^^ Keyword("true") |
+    acceptSeq("false") <~ not(identChar | digit) ^^^ Keyword("false") |
+    acceptSeq("if") <~ not(identChar | digit) ^^^ Keyword("if") |
+    acceptSeq("else") <~ not(identChar | digit) ^^^ Keyword("else") |
+    acceptSeq("let") <~ not(identChar | digit) ^^^ Keyword("let") |
+    acceptSeq("in") <~ not(identChar | digit) ^^^ Keyword("in") |
+    acceptSeq("assume") <~ not(identChar | digit) ^^^ Keyword("assume") |
+    acceptSeq("=") ^^^ Keyword("=")
 
   val comma: Parser[Token] = ',' ^^^ Punctuation(',')
   val dot: Parser[Token] = '.' ^^^ Punctuation('.')

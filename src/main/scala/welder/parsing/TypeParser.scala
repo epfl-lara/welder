@@ -70,7 +70,7 @@ class TypeParser(val program: InoxProgram) extends StdTokenParsers with Position
     }
   lazy val parensType: Parser[Expression] = p('(') ~> typeExpression <~ p(')')
 
-  lazy val name: Parser[Expression] = positioned(acceptMatch("Non-function type expected.", {
+  lazy val name: Parser[Expression] = positioned(acceptMatch("Non-function type", {
     case RawType(t) => Literal(EmbeddedType(t))
     case RawIdentifier(i) => Literal(EmbeddedIdentifier(i))
     case lexical.Identifier(s) => Literal(Name(s))
