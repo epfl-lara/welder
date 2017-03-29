@@ -14,7 +14,7 @@ class ExpressionParser(program: InoxProgram) extends TypeParser(program) { self 
 
   import lexical.{Identifier => _, Quantifier => _, _}
 
-  val eir = new ExprIR(program)
+  val eir = new ExprIR(program) with ExpressionElaborator
   
   import eir._
   import eir.program.trees
@@ -27,7 +27,7 @@ class ExpressionParser(program: InoxProgram) extends TypeParser(program) { self 
   }
 
   lazy val selectableExpr: Parser[Expression] = withApplication {
-    invocationExpr | literalExpr | variableExpr | literalSetLikeExpr | tupleOrParensExpr
+    holeExpr | invocationExpr | literalExpr | variableExpr | literalSetLikeExpr | tupleOrParensExpr
   }
 
   def withTypeAnnotation(exprParser: Parser[Expression]): Parser[Expression] = {
@@ -94,6 +94,7 @@ class ExpressionParser(program: InoxProgram) extends TypeParser(program) { self 
   lazy val selectorIdentifier: Parser[Field] = acceptMatch("Selector", {
     case lexical.Identifier(name) => FieldName(name)
     case RawIdentifier(i) => FieldIdentifier(i)
+    case Hole(i) => FieldHole(i)
   })
 
   lazy val greedyRight: Parser[Expression] = quantifierExpr | ifExpr | letExpr | assumeExpr
@@ -134,6 +135,11 @@ class ExpressionParser(program: InoxProgram) extends TypeParser(program) { self 
     bd <- commit(expression)
   } yield Let(bs, bd)
 
+  lazy val holeExpr: Parser[Expression] = acceptMatch("Hole", {
+    case Hole(i) => ExpressionHole(i)
+  })
+
+
   lazy val literalExpr: Parser[Expression] = positioned(acceptMatch("Literal", {
     case Keyword("true")  => BooleanLiteral(true)
     case Keyword("false") => BooleanLiteral(false)
@@ -148,6 +154,7 @@ class ExpressionParser(program: InoxProgram) extends TypeParser(program) { self 
   lazy val identifier: Parser[Identifier] = positioned(acceptMatch("Identifier", {
     case lexical.Identifier(name) => IdentifierName(name)
     case RawIdentifier(i) => IdentifierIdentifier(i)
+    case Hole(i) => IdentifierHole(i)
   })) withFailureMessage {
     (p: Position) => withPos("Identifier expected.", p)
   }
@@ -325,5 +332,6 @@ class ExpressionParser(program: InoxProgram) extends TypeParser(program) { self 
   } yield i match {
     case IdentifierIdentifier(v) => trees.ValDef(v, t)
     case IdentifierName(n) => trees.ValDef(FreshIdentifier(n), t)
+    case IdentifierHole(_) => throw new scala.Error("Unexpected hole in value definition.")
   }
 }

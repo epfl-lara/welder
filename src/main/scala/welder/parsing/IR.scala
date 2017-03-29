@@ -13,7 +13,7 @@ trait IR {
   type Field       // Fields.
   type Quantifier  // Quantifiers.
 
-  sealed abstract class Expression(pre: String) extends Positional with Product {
+  abstract class Expression(pre: String) extends Positional with Product {
     override def productPrefix = pos + "@" + pre
   }
   case class Variable(identifier: Identifier) extends Expression("Variable")

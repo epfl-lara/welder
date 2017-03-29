@@ -27,6 +27,7 @@ class InoxLexer(val program: InoxProgram) extends StdLexical with StringContextL
   case class RawIdentifier(identifier: inox.Identifier) extends Token { def chars = identifier.name }
   case class RawExpr(expr: Expr) extends Token { def chars = expr.toString }
   case class RawType(tpe: Type) extends Token { def chars = tpe.toString }
+  case class Hole(pos: Int) extends Token { def chars = "$" + pos }
 
   override def token: Parser[Token] =
     char | number | operator | keywords | punctuation | parens | quantifier | super.token
@@ -57,13 +58,14 @@ class InoxLexer(val program: InoxProgram) extends StdLexical with StringContextL
     CharLit(_)
   }
 
-  val quantifier: Parser[Token] = '∀' ^^^ Quantifier("forall") |
-                                  '∃' ^^^ Quantifier("exists") |
-                                  'λ' ^^^ Quantifier("lambda") |
-                                  acceptSeq("forall") ^^^ Quantifier("forall") |
-                                  acceptSeq("exists") ^^^ Quantifier("exists") |
-                                  acceptSeq("lambda") ^^^ Quantifier("lambda") |
-                                  acceptSeq("choose") ^^^ Quantifier("choose")
+  val quantifier: Parser[Token] =
+    '∀' ^^^ Quantifier("forall") |
+    '∃' ^^^ Quantifier("exists") |
+    'λ' ^^^ Quantifier("lambda") |
+    acceptSeq("forall") ^^^ Quantifier("forall") |
+    acceptSeq("exists") ^^^ Quantifier("exists") |
+    acceptSeq("lambda") ^^^ Quantifier("lambda") |
+    acceptSeq("choose") ^^^ Quantifier("choose")
 
 
   val operator: Parser[Token] =
@@ -84,6 +86,7 @@ class InoxLexer(val program: InoxProgram) extends StdLexical with StringContextL
     case i: inox.Identifier => RawIdentifier(i)
     case e: Expr => RawExpr(e)
     case t: Type => RawType(t)
+    case MatchPosition(i) => Hole(i)
     case _ => ErrorToken("Invalid element: " + x)
   }
 }
