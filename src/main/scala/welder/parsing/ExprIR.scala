@@ -597,6 +597,13 @@ class ExprIR(val program: InoxProgram) extends IR {
         })
       }
 
+      // Bitwise negation.
+      case Operation("~", Seq(arg)) => {
+        typeCheck(arg, expected).map(trees.BVNot(_)).addConstraint({
+          Constraint.isBitVector(expected)
+        })
+      }
+
       // Binary operation defined on comparable types.
       case Operation(ComparableBinOp(op), args) => {
 

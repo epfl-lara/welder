@@ -15,7 +15,7 @@ class InoxLexer(val program: InoxProgram) extends StdLexical with StringContextL
 
   import program.trees._
 
-  val unaryOps: Seq[String] = Seq("-", "+", "!")
+  val unaryOps: Seq[String] = Seq("-", "+", "!", "~")
   val opTable: Seq[(Seq[String], Assoc)] = Seq(
 
     Seq("*", "/", "%", "mod") -> LeftAssoc,
@@ -29,14 +29,20 @@ class InoxLexer(val program: InoxProgram) extends StdLexical with StringContextL
     Seq("⊆", "∈") -> LeftAssoc,
 
     Seq("<<", ">>", ">>>") -> LeftAssoc,
-    
+
     Seq(">=", "<=", ">", "<") -> LeftAssoc,
 
     Seq("==", "!=") -> LeftAssoc,
 
-    Seq("&&", "&") -> LeftAssoc,
+    Seq("&") -> LeftAssoc,
 
-    Seq("||", "|") -> LeftAssoc,
+    Seq("^") -> LeftAssoc,
+
+    Seq("|") -> LeftAssoc,
+
+    Seq("&&") -> LeftAssoc,
+
+    Seq("||") -> LeftAssoc,
 
     Seq("==>") -> RightAssoc,
 
