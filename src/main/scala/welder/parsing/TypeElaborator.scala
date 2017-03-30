@@ -7,8 +7,6 @@ import scala.util.parsing.input._
 
 import Utils.plural
 
-class TypeException(val errors: Seq[(String, Position)]) extends Exception("Type Exception.")
-
 trait TypeElaborators { self: Interpolator => 
 
   import Utils.{either, traverse, plural}

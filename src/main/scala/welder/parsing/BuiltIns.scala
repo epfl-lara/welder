@@ -81,7 +81,6 @@ trait BuiltIns { self: Interpolator =>
   }
 
   trait EmptyBuiltIns extends BuiltInNames {
-
     override val names: Map[String, BuiltIn] = Map()
   }
 }
