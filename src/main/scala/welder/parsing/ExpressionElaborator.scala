@@ -33,7 +33,7 @@ trait ExpressionElaborators { self: Interpolator =>
 
     lazy val unexpectedBinding: String = "Unexpected binding. Bindings can only appear in bags and maps constructors."
 
-    lazy val unknownConstruct: String = "Unexpected kernel."
+    lazy val unknownConstruct: String = "Unexpected construct."
 
     lazy val tupleInsufficientLength: String = "Tuples should be of length greater or equal to 2."
 
@@ -255,7 +255,7 @@ trait ExpressionElaborators { self: Interpolator =>
 
     object SubstringOperation {
       def unapply(expr: Expression): Option[(Expression, Expression, Expression)] = expr match {
-        case PrimitiveFunction(bi.StringConcatenate, _, Seq(str, start, end), _) => {
+        case PrimitiveFunction(bi.StringSubstring, _, Seq(str, start, end), _) => {
           Some((str, start, end))
         }
         case _ => None
@@ -660,7 +660,7 @@ trait ExpressionElaborators { self: Interpolator =>
         //---- Arity Errors on Primitive Functions and Constructors ----//
 
         case PrimitiveFunction(builtIn, name, args, otpes) if 
-            (args.length != builtIn.params || (otpes.isDefined && otpes.get.length != builtIn.tparams)) => {
+            ((builtIn.params.isDefined && args.length != builtIn.params.get) || (otpes.isDefined && otpes.get.length != builtIn.tparams)) => {
 
           val kind = if (builtIn.isConstructor) "Primitive constructor" else "Primitive function"
 
