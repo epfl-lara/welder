@@ -13,46 +13,54 @@ trait Interpolations { self: Theory =>
   
   import program.trees._
 
-  private object Parser extends ExpressionParser(program) {
-
-    import lexical._
-
-    def parseIR(sc: StringContext, args: Seq[Any]): ParseResult[eir.Expression] = {
-      phrase(expression)(getReader(sc, args))
-    }
-
-    def parseValDef(sc: StringContext, args: Seq[Any]): ParseResult[ValDef] = {
-      phrase(inoxValDef)(getReader(sc, args))
-    }
-
-    def parseType(sc: StringContext, args: Seq[Any]): ParseResult[Type] = {
-      phrase(inoxType)(getReader(sc, args))
-    }
+  lazy val interpolator = new Interpolator {
+    override val program = self.program
   }
 
   implicit class ExpressionInterpolator(sc: StringContext) {
 
-    private def fromParseResult[A](result: Parser.ParseResult[A]): A =
+    import interpolator._
+
+    class Parser extends ExpressionParser {
+
+      import lexical._
+
+      def parseIR(sc: StringContext, args: Seq[Any]): ParseResult[ExprIR.Expression] = {
+        phrase(expression)(getReader(sc, args))
+      }
+
+      def parseValDef(sc: StringContext, args: Seq[Any]): ParseResult[ValDef] = {
+        phrase(inoxValDef)(getReader(sc, args))
+      }
+
+      def parseType(sc: StringContext, args: Seq[Any]): ParseResult[Type] = {
+        phrase(inoxType)(getReader(sc, args))
+      }
+    }
+
+    val parser = new Parser()
+
+    private def fromParseResult[A](result: parser.ParseResult[A]): A =
       result match {
-        case Parser.NoSuccess(msg, _) => throw new Exception(msg)
-        case Parser.Success(value, _) => value
+        case parser.NoSuccess(msg, _) => throw new Exception(msg)
+        case parser.Success(value, _) => value
       }
 
     def e(args: Any*): Expr = {
-      val ir = fromParseResult(Parser.parseIR(sc, args))
-      Parser.eir.toInoxExpr(ir)
+      val ir = fromParseResult(parser.parseIR(sc, args))
+      ExprIR.toInoxExpr(ir)
     }
 
     def ir(args: Any*): Any = {
-      fromParseResult(Parser.parseIR(sc, args))
+      fromParseResult(parser.parseIR(sc, args))
     }
 
     def v(args: Any*): ValDef = {
-      fromParseResult(Parser.parseValDef(sc, args))
+      fromParseResult(parser.parseValDef(sc, args))
     }
 
     def r(args: Any*): Seq[Any] = {
-      val reader = Parser.lexical.getReader(sc, args)
+      val reader = parser.lexical.getReader(sc, args)
 
       import scala.util.parsing.input.Reader 
 
@@ -65,7 +73,7 @@ trait Interpolations { self: Theory =>
     }
 
     def t(args: Any*): Type = {
-      fromParseResult(Parser.parseType(sc, args))
+      fromParseResult(parser.parseType(sc, args))
     }
   }
 }

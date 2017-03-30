@@ -2,81 +2,86 @@
 package welder
 package parsing
 
-trait BuiltInNames {
+trait BuiltIns { self: Interpolator =>
 
-  sealed abstract class BuiltIn(val params: Option[Int], val tparams: Int) {
-    val isConstructor = false
-  }
+  lazy val bi = new DefaultBuiltIns {}
 
-  trait Constructor { self: BuiltIn =>
-    override abstract val isConstructor = true
-  }
+  trait BuiltInNames { 
 
-  case object AsInstanceOf extends BuiltIn(Some(1), 1)
-  case object IsInstanceOf extends BuiltIn(Some(1), 1)
+    sealed abstract class BuiltIn(val params: Option[Int], val tparams: Int) {
+      val isConstructor = false
+    }
 
-  case object StringConcatenate extends BuiltIn(Some(2), 0)
-  case object StringLength extends BuiltIn(Some(1), 0)
-  case object StringSubstring extends BuiltIn(Some(3), 0)
+    trait Constructor { self: BuiltIn =>
+      override abstract val isConstructor = true
+    }
 
-  case object SetConstructor extends BuiltIn(None, 1) with Constructor
-  case object SetContains extends BuiltIn(Some(2), 1)
-  case object SetAdd extends BuiltIn(Some(2), 1)
-  case object SetUnion extends BuiltIn(Some(2), 1)
-  case object SetIntersection extends BuiltIn(Some(2), 1)
-  case object SetDifference extends BuiltIn(Some(2), 1)
-  case object SetSubset extends BuiltIn(Some(2), 1)
+    case object AsInstanceOf extends BuiltIn(Some(1), 1)
+    case object IsInstanceOf extends BuiltIn(Some(1), 1)
 
-  case object BagConstructor extends BuiltIn(None, 1) with Constructor
-  case object BagMultiplicity extends BuiltIn(Some(2), 1)
-  case object BagAdd extends BuiltIn(Some(2), 1)
-  case object BagUnion extends BuiltIn(Some(2), 1)
-  case object BagIntersection extends BuiltIn(Some(2), 1)
-  case object BagDifference extends BuiltIn(Some(2), 1)
+    case object StringConcatenate extends BuiltIn(Some(2), 0)
+    case object StringLength extends BuiltIn(Some(1), 0)
+    case object StringSubstring extends BuiltIn(Some(3), 0)
 
-  case object MapConstructor extends BuiltIn(None, 2) with Constructor
-  case object MapApply extends BuiltIn(Some(2), 2)
-  case object MapUpdated extends BuiltIn(Some(2), 3)
+    case object SetConstructor extends BuiltIn(None, 1) with Constructor
+    case object SetContains extends BuiltIn(Some(2), 1)
+    case object SetAdd extends BuiltIn(Some(2), 1)
+    case object SetUnion extends BuiltIn(Some(2), 1)
+    case object SetIntersection extends BuiltIn(Some(2), 1)
+    case object SetDifference extends BuiltIn(Some(2), 1)
+    case object SetSubset extends BuiltIn(Some(2), 1)
 
-  val names: Map[String, BuiltIn]
+    case object BagConstructor extends BuiltIn(None, 1) with Constructor
+    case object BagMultiplicity extends BuiltIn(Some(2), 1)
+    case object BagAdd extends BuiltIn(Some(2), 1)
+    case object BagUnion extends BuiltIn(Some(2), 1)
+    case object BagIntersection extends BuiltIn(Some(2), 1)
+    case object BagDifference extends BuiltIn(Some(2), 1)
 
-  object BuiltIn {
-    def unapply(name: String): Option[BuiltIn] = {
-      names.get(name)
+    case object MapConstructor extends BuiltIn(None, 2) with Constructor
+    case object MapApply extends BuiltIn(Some(2), 2)
+    case object MapUpdated extends BuiltIn(Some(2), 3)
+
+    val names: Map[String, BuiltIn]
+
+    object BuiltIn {
+      def unapply(name: String): Option[BuiltIn] = {
+        names.get(name)
+      }
     }
   }
-}
 
-trait DefaultBuiltIns extends BuiltInNames {
-  override val names: Map[String, BuiltIn] = Map(
-    AsInstanceOf -> "asInstanceOf",
-    IsInstanceOf -> "isInstanceOf",
+  trait DefaultBuiltIns extends BuiltInNames {
+    override val names: Map[String, BuiltIn] = Map(
+      AsInstanceOf -> "asInstanceOf",
+      IsInstanceOf -> "isInstanceOf",
 
-    StringConcatenate -> "concatenate",
-    StringLength -> "length",
-    StringSubstring -> "substring",
+      StringConcatenate -> "concatenate",
+      StringLength -> "length",
+      StringSubstring -> "substring",
 
-    SetConstructor -> "Set",
-    SetContains -> "contains",
-    SetAdd -> "add",
-    SetUnion -> "union",
-    SetIntersection -> "intersection",
-    SetDifference -> "difference",
-    SetSubset -> "subset",
+      SetConstructor -> "Set",
+      SetContains -> "contains",
+      SetAdd -> "add",
+      SetUnion -> "union",
+      SetIntersection -> "intersection",
+      SetDifference -> "difference",
+      SetSubset -> "subset",
 
-    BagConstructor -> "Bag",
-    BagMultiplicity -> "multiplicity",
-    BagAdd -> "bagAdd",
-    BagUnion -> "bagUnion",
-    BagIntersection -> "bagIntersection",
-    BagDifference -> "bagDifference",
+      BagConstructor -> "Bag",
+      BagMultiplicity -> "multiplicity",
+      BagAdd -> "bagAdd",
+      BagUnion -> "bagUnion",
+      BagIntersection -> "bagIntersection",
+      BagDifference -> "bagDifference",
 
-    MapConstructor -> "Map",
-    MapApply -> "apply",
-    MapUpdated -> "updated").map(_.swap)
-}
+      MapConstructor -> "Map",
+      MapApply -> "apply",
+      MapUpdated -> "updated").map(_.swap)
+  }
 
-trait EmptyBuiltIns extends BuiltInNames {
+  trait EmptyBuiltIns extends BuiltInNames {
 
-  override val names: Map[String, BuiltIn] = Map()
+    override val names: Map[String, BuiltIn] = Map()
+  }
 }

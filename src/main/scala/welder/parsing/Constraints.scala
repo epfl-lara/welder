@@ -6,12 +6,10 @@ import scala.util.parsing.input._
 /** Contains description of (type-checking) constraints and
  *  and constrained values.
  */
-trait Constraints {
+trait Constraints { self: Interpolator =>
 
-  val trees: inox.ast.Trees
-  val symbols: trees.Symbols
-
-  import trees.Type
+  import program.trees
+  import program.trees.Type
 
   /** Represents a meta type-parameter. */
   case class Unknown(val param: BigInt) extends Type with Positional {
@@ -19,13 +17,11 @@ trait Constraints {
   }
 
   object Unknown {
-    def fresh(implicit position: Position): Unknown = Unknown(Unique.fresh).setPos(position)
-  }
+    def fresh(implicit position: Position): Unknown = Unknown(next).setPos(position)
 
-  object Unique {
-    var i: BigInt = 0
+    private var i: BigInt = 0
 
-    def fresh: BigInt = synchronized {
+    def next: BigInt = synchronized {
       val ret = i
       i += 1
       ret
