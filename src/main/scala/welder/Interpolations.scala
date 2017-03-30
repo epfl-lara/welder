@@ -23,8 +23,19 @@ trait Interpolations { self: Theory =>
 
     private val parser = new ExpressionParser()
 
-    def e(args: Any*): Expr = {
-      ExprIR.getExpr(ir(args : _*))
+    object e {
+      def apply(args: Any*): Expr = {
+        ExprIR.getExpr(ir(args : _*))
+      }
+
+      def unapplySeq(expr: Expr): Option[Seq[Any]] = {
+        val args = Seq.tabulate(sc.parts.length - 1)(MatchPosition(_))
+        val ir = parser.getFromSC(sc, args)(parser.phrase(parser.expression))
+        ExprIR.extract(expr, ir)(Map()) match {
+          case Some(mappings) if mappings.size == sc.parts.length - 1 => Some(mappings.toSeq.sortBy(_._1).map(_._2))
+          case _ => None
+        }
+      }
     }
 
     def ir(args: Any*): ExprIR.Expression = {
@@ -48,8 +59,19 @@ trait Interpolations { self: Theory =>
       go(reader)
     }
 
-    def t(args: Any*): Type = {
-      parser.getFromSC(sc, args)(parser.phrase(parser.inoxType))
+    object t {
+      def apply(args: Any*): Type = {
+        parser.getFromSC(sc, args)(parser.phrase(parser.inoxType))
+      }
+
+      def unapplySeq(tpe: Type): Option[Seq[Any]] = {
+        val args = Seq.tabulate(sc.parts.length - 1)(MatchPosition(_))
+        val ir = parser.getFromSC(sc, args)(parser.phrase(parser.typeExpression))
+        TypeIR.extract(tpe, ir) match {
+          case Some(mappings) if mappings.size == sc.parts.length - 1 => Some(mappings.toSeq.sortBy(_._1).map(_._2))
+          case _ => None
+        }
+      }
     }
   }
 }

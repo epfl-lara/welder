@@ -5,9 +5,9 @@ import inox._
 
 import scala.util.parsing.input.Position
 
-trait TypeIRs extends TypeElaborators { self: Interpolator =>
+trait TypeIRs extends TypeElaborators with TypeExtractors { self: Interpolator =>
 
-  object TypeIR extends IR with TypeElaborator {
+  object TypeIR extends IR with TypeElaborator with TypeExtractor {
 
     import program.trees
     import program.symbols

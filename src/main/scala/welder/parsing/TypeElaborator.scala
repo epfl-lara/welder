@@ -13,7 +13,7 @@ trait TypeElaborators { self: Interpolator =>
 
   trait TypeElaborator { self: TypeIR.type =>
 
-    private object BVType {
+    object BVType {
       def apply(size: Int): String = {
         require(size > 0)
 
@@ -30,7 +30,7 @@ trait TypeElaborators { self: Interpolator =>
       }
     }
 
-    private lazy val basic: Map[Value, trees.Type] = Seq(
+    lazy val basic: Map[Value, trees.Type] = Seq(
       "Boolean" -> trees.BooleanType,
       "BigInt"  -> trees.IntegerType,
       "Char"    -> trees.CharType,

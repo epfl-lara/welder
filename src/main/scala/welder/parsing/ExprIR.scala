@@ -4,10 +4,10 @@ package parsing
 import inox._
 import scala.util.parsing.input._
 
-trait ExprIRs extends ExpressionElaborators { self: Interpolator =>
+trait ExprIRs extends ExpressionElaborators with ExpressionExtractors { self: Interpolator =>
 
   /** IR for expressions. */
-  object ExprIR extends IR with ExpressionElaborator {
+  object ExprIR extends IR with ExpressionElaborator with ExpressionExtractor {
 
     import program.trees
     import program.symbols
