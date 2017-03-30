@@ -34,7 +34,7 @@ trait ExpressionParsers { self: Interpolator =>
     def withTypeAnnotation(exprParser: Parser[Expression]): Parser[Expression] = {
       for {
         e <- exprParser
-        ot <- opt(p(':') ~> commit(inoxType))
+        ot <- opt(p(':') ~> commit(typeExpression))
       } yield ot match {
         case None => e
         case Some(t) => TypeApplication(Operation("TypeAnnotation", Seq(e)), Seq(t))
@@ -213,7 +213,7 @@ trait ExpressionParsers { self: Interpolator =>
     lazy val defaultMap: Parser[(Expression, Option[Type])] =
       for {
         _ <- elem(Operator("*"))
-        ot <- opt(p(':') ~> inoxType)
+        ot <- opt(p(':') ~> typeExpression)
         _ <- commit(elem(Operator("->")) withFailureMessage {
           (p: Position) => withPos("Missing binding for the default case. Expected `->`.", p)
         })
@@ -255,9 +255,9 @@ trait ExpressionParsers { self: Interpolator =>
       case lexical.Quantifier("choose") => Choose
     })
 
-    lazy val valDef: Parser[(Identifier, Option[trees.Type])] = for {
+    lazy val valDef: Parser[(Identifier, Option[Type])] = for {
       i <- identifier
-      otype <- opt(p(':') ~> commit(inoxType))
+      otype <- opt(p(':') ~> commit(typeExpression))
     } yield (i, otype)
 
     def quantifierExpr: Parser[Expression] = for {
@@ -322,7 +322,7 @@ trait ExpressionParsers { self: Interpolator =>
       }
     }
 
-    lazy val typeArguments: Parser[List[Type]] = p('[') ~> rep1sep(commit(inoxType), p(',')) <~ commit(p(']') withFailureMessage {
+    lazy val typeArguments: Parser[List[Type]] = p('[') ~> rep1sep(commit(typeExpression), p(',')) <~ commit(p(']') withFailureMessage {
       (p: Position) => withPos("Missing ']'.", p)
     })
 

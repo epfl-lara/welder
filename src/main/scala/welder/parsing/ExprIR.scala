@@ -38,7 +38,7 @@ trait ExprIRs extends ExpressionElaborators { self: Interpolator =>
     case class FieldIdentifier(identifier: inox.Identifier) extends Field
     case class FieldHole(index: Int) extends Field
 
-    type Type = trees.Type
+    type Type = TypeIR.Expression
 
     sealed abstract class Value
     case class EmbeddedExpr(expr: trees.Expr) extends Value

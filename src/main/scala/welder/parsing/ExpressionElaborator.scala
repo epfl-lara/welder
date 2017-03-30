@@ -1,4 +1,3 @@
-
 package welder
 package parsing
 
@@ -14,8 +13,7 @@ trait ExpressionElaborators { self: Interpolator =>
 
     import program.trees
     import program.symbols
-
-    import ExprIR._
+    import TypeIR.getType
 
     //---- Errors ----//
 
@@ -82,7 +80,7 @@ trait ExpressionElaborators { self: Interpolator =>
     }
 
     object TypedFunDef {
-      def unapply(expression: Expression): Option[(trees.FunDef, Option[Seq[trees.Type]])] = expression match {
+      def unapply(expression: Expression): Option[(trees.FunDef, Option[Seq[Type]])] = expression match {
         case TypeApplication(FunDef(fd), targs) => Some((fd, Some(targs)))
         case FunDef(fd) => Some((fd, None))
         case _ => None
@@ -107,7 +105,7 @@ trait ExpressionElaborators { self: Interpolator =>
     }
 
     object TypedConsDef {
-      def unapply(expression: Expression): Option[(trees.ADTConstructor, Option[Seq[trees.Type]])] = expression match {
+      def unapply(expression: Expression): Option[(trees.ADTConstructor, Option[Seq[Type]])] = expression match {
         case TypeApplication(ConsDef(cons), targs) => Some((cons, Some(targs)))
         case ConsDef(cons) => Some((cons, None))
         case _ => None
@@ -149,7 +147,7 @@ trait ExpressionElaborators { self: Interpolator =>
       }
     }
 
-  object BooleanNAryOp {
+    object BooleanNAryOp {
       def unapply(string: String): Option[Seq[trees.Expr] => trees.Expr] = string match {
         case "&&" => Some({ (exprs: Seq[trees.Expr]) => trees.And(exprs) })
         case "||" => Some({ (exprs: Seq[trees.Expr]) => trees.Or(exprs) })
@@ -353,9 +351,9 @@ trait ExpressionElaborators { self: Interpolator =>
     }
 
     /** Conversion to Inox expression. */
-    def toInoxExpr(expr: Expression): trees.Expr = {
+    def getExpr(expr: Expression): trees.Expr = {
       typeCheck(expr, Unknown.fresh(expr.pos))(Map()) match {
-        case Unsatifiable(es) => throw new Exception(es.map(_.toString).mkString("\n\n"))
+        case Unsatifiable(es) => throw new ExpressionElaborationException(es)
         case WithConstraints(elaborator, constraints) => {
           val unifier = Solver.solveConstraints(constraints)
           elaborator(unifier)
@@ -734,7 +732,7 @@ trait ExpressionElaborators { self: Interpolator =>
         }
 
         case BagConstruction(Bindings(_, bs), otpe) => {
-          val elementType = otpe.getOrElse(Unknown.fresh)
+          val elementType: trees.Type = otpe.map(getType).getOrElse(Unknown.fresh)
           val freshs = Seq.fill(bs.length)(Unknown.fresh)
           val countType = Unknown.fresh
 
@@ -761,7 +759,7 @@ trait ExpressionElaborators { self: Interpolator =>
 
         // Bag multiplicity.
         case BagMultiplicityOperation(map, key, otpe) => {
-          val elementType = otpe.getOrElse(Unknown.fresh)
+          val elementType = otpe.map(getType).getOrElse(Unknown.fresh)
           val keyExpected = Unknown.fresh
           val mapExpected = Unknown.fresh
 
@@ -778,7 +776,7 @@ trait ExpressionElaborators { self: Interpolator =>
 
         // Bag binary operation.
         case BagBinaryOperation(map1, map2, op, otpe) => {
-          val elementType = otpe.getOrElse(Unknown.fresh)
+          val elementType = otpe.map(getType).getOrElse(Unknown.fresh)
           val mapExpected = Unknown.fresh
 
           typeCheck(map1, mapExpected).combine(typeCheck(map2, mapExpected))({
@@ -791,7 +789,7 @@ trait ExpressionElaborators { self: Interpolator =>
         // Bag add operation.
         case BagAddOperation(bag, elem, otpe) => {
           val elementExpected = Unknown.fresh
-          val elementType = otpe.getOrElse(Unknown.fresh)
+          val elementType = otpe.map(getType).getOrElse(Unknown.fresh)
 
           typeCheck(bag, expected).map({ (b: trees.Expr) => 
             (e: trees.Expr) => trees.BagAdd(b, e)
@@ -816,8 +814,8 @@ trait ExpressionElaborators { self: Interpolator =>
 
           val (oKeyType, oValueType) = optEitherKeyAll match {
             case None => (None, None)
-            case Some(Left(t)) => (Some(t), None)
-            case Some(Right((t1, t2))) => (Some(t1), Some(t2))
+            case Some(Left(t)) => (Some(getType(t)), None)
+            case Some(Right((t1, t2))) => (Some(getType(t1)), Some(getType(t2)))
           } 
 
           val keyType = oKeyType.getOrElse(Unknown.fresh)
@@ -855,7 +853,9 @@ trait ExpressionElaborators { self: Interpolator =>
 
         // Map apply.
         case MapApplyOperation(map, key, otpes) => {
-          val (keyType, valueType) = otpes.getOrElse((Unknown.fresh, Unknown.fresh))
+          val (keyType, valueType) = otpes.map({
+            case (t1, t2) => (getType(t1), getType(t2))
+          }).getOrElse((Unknown.fresh, Unknown.fresh))
           val keyExpected = Unknown.fresh
           val mapExpected = Unknown.fresh
 
@@ -872,7 +872,9 @@ trait ExpressionElaborators { self: Interpolator =>
 
         // Map updated.
         case MapUpdatedOperation(map, key, value, otpes) => {
-          val (keyType, valueType) = otpes.getOrElse((Unknown.fresh, Unknown.fresh))
+          val (keyType, valueType) = otpes.map({
+            case (t1, t2) => (getType(t1), getType(t2))
+          }).getOrElse((Unknown.fresh, Unknown.fresh))
           val keyExpected = Unknown.fresh
           val valueExpected = Unknown.fresh
 
@@ -895,7 +897,7 @@ trait ExpressionElaborators { self: Interpolator =>
 
         // Call to the Set constructor.
         case SetConstruction(es, otpe) => {
-          val upper = otpe.getOrElse(Unknown.fresh)
+          val upper = otpe.map(getType).getOrElse(Unknown.fresh)
           val lowers = Seq.fill(es.length) { Unknown.fresh }
 
           Constrained.withUnifier({ (unifier: Unifier) => 
@@ -915,7 +917,7 @@ trait ExpressionElaborators { self: Interpolator =>
         case ContainsOperation(set, elem, otpe) => {
           val setType = Unknown.fresh
           val elementExpected = Unknown.fresh
-          val elementType = otpe.getOrElse(Unknown.fresh)
+          val elementType = otpe.map(getType).getOrElse(Unknown.fresh)
 
           typeCheck(set, setType).map({ (s: trees.Expr) => 
             (e: trees.Expr) => trees.ElementOfSet(e, s)
@@ -933,7 +935,7 @@ trait ExpressionElaborators { self: Interpolator =>
         // Call to subset.
         case SubsetOperation(set1, set2, otpe) => {
           val setType = Unknown.fresh
-          val elementType = otpe.getOrElse(Unknown.fresh)
+          val elementType = otpe.map(getType).getOrElse(Unknown.fresh)
 
           typeCheck(set1, setType).map({ (s1: trees.Expr) => 
             (s2: trees.Expr) => trees.SubsetOf(s1, s2)
@@ -948,7 +950,7 @@ trait ExpressionElaborators { self: Interpolator =>
 
         // Binary operations on set that return sets.
         case SetBinaryOperation(set1, set2, f, otpe) => {
-          val elementType = otpe.getOrElse(Unknown.fresh)
+          val elementType = otpe.map(getType).getOrElse(Unknown.fresh)
 
           typeCheck(set1, expected).map({ (s1: trees.Expr) => 
             (s2: trees.Expr) => f(s1, s2)
@@ -962,7 +964,7 @@ trait ExpressionElaborators { self: Interpolator =>
         // Set add operation.
         case SetAddOperation(set, elem, otpe) => {
           val elementExpected = Unknown.fresh
-          val elementType = otpe.getOrElse(Unknown.fresh)
+          val elementType = otpe.map(getType).getOrElse(Unknown.fresh)
 
           typeCheck(set, expected).map({ (s: trees.Expr) => 
             (e: trees.Expr) => trees.SetAdd(s, e)
@@ -1050,7 +1052,7 @@ trait ExpressionElaborators { self: Interpolator =>
             case Some(tpeArgs) => {
               constrained.addConstraints({
                 // The annotated types should correspond to the type of the parameters.
-                tpeArgs.zip(typeParamToFresh.map(_._2)).map({ case (a, b) => Constraint.equal(a, b) })
+                tpeArgs.zip(typeParamToFresh.map(_._2)).map({ case (a, b) => Constraint.equal(getType(a), b) })
               }).checkImmediate(
                 // Their should be the same number of type applied than type parameters of the function.
                 tpeArgs.length == fd.tparams.length,
@@ -1106,7 +1108,7 @@ trait ExpressionElaborators { self: Interpolator =>
             case Some(tpeArgs) => {
               constrained.addConstraints({
                 // The annotated types should correspond to the type of the parameters.
-                tpeArgs.zip(typeParamToFresh.map(_._2)).map({ case (a, b) => Constraint.equal(a, b) })
+                tpeArgs.zip(typeParamToFresh.map(_._2)).map({ case (a, b) => Constraint.equal(getType(a), b) })
               }).checkImmediate(
                 // Their should be the same number of type applied than type parameters of the function.
                 tpeArgs.length == cons.tparams.length,
@@ -1196,7 +1198,7 @@ trait ExpressionElaborators { self: Interpolator =>
           }
           else {
             constrained.addConstraint({
-              Constraint.equal(identType, otype.get)
+              Constraint.equal(identType, getType(otype.get))
             })
           }
         }
@@ -1223,7 +1225,7 @@ trait ExpressionElaborators { self: Interpolator =>
           }).addConstraints({
             // Type of variable should correspond to those annotated.
             bindings.zip(bs).flatMap({
-              case ((_, oType), (_, tpe)) => oType.map(Constraint.equal(_, tpe))
+              case ((_, oType), (_, tpe)) => oType.map((t: Type) => Constraint.equal(getType(t), tpe))
             })
           }).addConstraint({
             // The expected type should be a function.
@@ -1257,7 +1259,7 @@ trait ExpressionElaborators { self: Interpolator =>
           }).addConstraints({
             // Type of variable should correspond to those annotated.
             bindings.zip(bs).flatMap({
-              case ((_, oType), (_, tpe)) => oType.map(Constraint.equal(_, tpe))
+              case ((_, oType), (_, tpe)) => oType.map((t: Type) => Constraint.equal(getType(t), tpe))
             })
           }).addConstraint({
             // The expected type should be boolean.
@@ -1283,7 +1285,7 @@ trait ExpressionElaborators { self: Interpolator =>
           }).addConstraints({
             // Type of variable should correspond to those annotated.
             bindings.zip(bs).flatMap({
-              case ((_, oType), (_, tpe)) => oType.map(Constraint.equal(_, tpe))
+              case ((_, oType), (_, tpe)) => oType.map((t: Type) => Constraint.equal(getType(t), tpe))
             })
           }).addConstraint({
             // The expected type should be boolean.
@@ -1303,7 +1305,7 @@ trait ExpressionElaborators { self: Interpolator =>
           val constrained = Constrained.withUnifier({ (unifier: Unifier) =>
             (pred: trees.Expr) => trees.Choose(trees.ValDef(inoxIdent, unifier(identType)), pred)
           }).app({
-            typeCheck(body, predType)(store + (id.getName -> (inoxIdent, identType)))
+            typeCheck(body, predType)(store + (id.getName -> ((inoxIdent, identType))))
           }).addConstraint({
             Constraint.equal(predType, trees.BooleanType)
           }).addConstraint({
@@ -1312,7 +1314,7 @@ trait ExpressionElaborators { self: Interpolator =>
 
           otype match {
             case Some(tpe) => constrained.addConstraint({
-              Constraint.equal(identType, tpe)
+              Constraint.equal(identType, getType(tpe))
             })
             case _ => constrained
           }
@@ -1322,27 +1324,30 @@ trait ExpressionElaborators { self: Interpolator =>
 
         // Annotation.
         case TypeApplication(Operation("TypeAnnotation", Seq(expr)), Seq(tpe)) => {
+          val inoxTpe = getType(tpe)
           val sub = Unknown.fresh
 
           typeCheck(expr, sub).addConstraint({
-            Constraint.equal(expected, tpe)
+            Constraint.equal(expected, inoxTpe)
           }).addConstraint({
-            Constraint.subtype(sub, tpe)
+            Constraint.subtype(sub, inoxTpe)
           })
         }
 
         // Casting.
         case TypeApplication(Selection(expr, FieldName("asInstanceOf")), Seq(tpe)) => {
+          val inoxTpe = getType(tpe)
+
           val sup = Unknown.fresh
           val sub = Unknown.fresh
           typeCheck(expr, sub).map({
-            (e: trees.Expr) => trees.AsInstanceOf(e, tpe)
+            (e: trees.Expr) => trees.AsInstanceOf(e, inoxTpe)
           }).addConstraint({
             // The type of the casted expression is the expected type.
-            Constraint.equal(tpe, expected)
+            Constraint.equal(inoxTpe, expected)
           }).addConstraint({
             // There should exist a type which is a (non-strict) super type of the annotated type...
-            Constraint.subtype(tpe, sup)
+            Constraint.subtype(inoxTpe, sup)
           }).addConstraint({
             // ... and a super type of the type of the expression being cast. 
             Constraint.subtype(sub, sup)
@@ -1351,16 +1356,18 @@ trait ExpressionElaborators { self: Interpolator =>
 
         // Instance checking.
         case TypeApplication(Selection(expr, FieldName("isInstanceOf")), Seq(tpe)) => {
+          val inoxTpe = getType(tpe)
+
           val sup = Unknown.fresh
           val sub = Unknown.fresh
           typeCheck(expr, sub).map({
-            (e: trees.Expr) => trees.IsInstanceOf(e, tpe)
+            (e: trees.Expr) => trees.IsInstanceOf(e, inoxTpe)
           }).addConstraint({
             // The expected type should be Boolean.
             Constraint.equal(expected, trees.BooleanType)
           }).addConstraint({
             // There should exist a type which is a (non-strict) super type of the annotated type...
-            Constraint.subtype(tpe, sup)
+            Constraint.subtype(inoxTpe, sup)
           }).addConstraint({
             // ... and a super type of the type of the expression being checked. 
             Constraint.subtype(sub, sup)

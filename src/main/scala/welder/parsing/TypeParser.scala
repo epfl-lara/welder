@@ -10,11 +10,11 @@ import inox.InoxProgram
 
 trait TypeParsers { self: Interpolator =>
 
-  class TypeParser extends StdTokenParsers with PositionalErrors {
+  class TypeParser extends StdTokenParsers with PositionalErrors with StringContextParsers {
 
-    type Tokens = InoxLexer
+    type Tokens = Lexer.type
 
-    override val lexical = new InoxLexer
+    override val lexical = Lexer
 
     import TypeIR._
     import lexical.{Hole => _, _}

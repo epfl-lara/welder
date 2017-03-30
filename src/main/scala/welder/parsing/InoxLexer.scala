@@ -11,7 +11,7 @@ import inox.InoxProgram
 
 trait Lexers { self: Interpolator =>
 
-  class InoxLexer extends StdLexical with StringContextLexer {
+  object Lexer extends StdLexical with StringContextLexer {
 
     reserved ++= Seq("true", "false", "if", "else", "exists", "forall", "lambda", "choose", "let", "in", "assume")
 

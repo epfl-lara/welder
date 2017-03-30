@@ -12,12 +12,12 @@ trait Constraints { self: Interpolator =>
   import program.trees.Type
 
   /** Represents a meta type-parameter. */
-  case class Unknown(val param: BigInt) extends Type with Positional {
+  class Unknown(val param: BigInt) extends program.trees.Type with Positional {
     override def toString: String = pos + "@MetaParam(" + param + ")"
   }
 
   object Unknown {
-    def fresh(implicit position: Position): Unknown = Unknown(next).setPos(position)
+    def fresh(implicit position: Position): Unknown = new Unknown(next).setPos(position)
 
     private var i: BigInt = 0
 

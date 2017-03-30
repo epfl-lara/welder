@@ -5,9 +5,6 @@ import scala.util.parsing.input._
 
 import inox.InoxProgram
 
-class ConstraintException(message: String, location: Position) extends Exception(ErrorLocation(message, location).toString)
-
-
 trait ConstraintSolvers { self: Interpolator =>
   
   object Solver {
