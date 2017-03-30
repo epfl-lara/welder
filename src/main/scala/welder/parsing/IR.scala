@@ -24,4 +24,5 @@ trait IR {
   case class Literal(value: Value) extends Expression("Literal")
   case class TypeApplication(callee: Expression, args: Seq[Type]) extends Expression("TypeApplication")
   case class Let(bindings: Seq[(Identifier, Option[Type], Expression)], body: Expression) extends Expression("Let")
+  case class Hole(index: Int) extends Expression("Hole")
 }

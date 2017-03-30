@@ -12,7 +12,7 @@ import welder.parsing._
 
 class ExpressionParser(program: InoxProgram) extends TypeParser(program) { self =>
 
-  import lexical.{Identifier => _, Quantifier => _, _}
+  import lexical.{Identifier => _, Quantifier => _, Hole => _, _}
 
   val eir = new ExprIR(program) with ExpressionElaborator
   
@@ -94,7 +94,7 @@ class ExpressionParser(program: InoxProgram) extends TypeParser(program) { self 
   lazy val selectorIdentifier: Parser[Field] = acceptMatch("Selector", {
     case lexical.Identifier(name) => FieldName(name)
     case RawIdentifier(i) => FieldIdentifier(i)
-    case Hole(i) => FieldHole(i)
+    case lexical.Hole(i) => FieldHole(i)
   })
 
   lazy val greedyRight: Parser[Expression] = quantifierExpr | ifExpr | letExpr | assumeExpr
@@ -136,7 +136,7 @@ class ExpressionParser(program: InoxProgram) extends TypeParser(program) { self 
   } yield Let(bs, bd)
 
   lazy val holeExpr: Parser[Expression] = acceptMatch("Hole", {
-    case Hole(i) => ExpressionHole(i)
+    case lexical.Hole(i) => Hole(i)
   })
 
 
@@ -154,7 +154,7 @@ class ExpressionParser(program: InoxProgram) extends TypeParser(program) { self 
   lazy val identifier: Parser[Identifier] = positioned(acceptMatch("Identifier", {
     case lexical.Identifier(name) => IdentifierName(name)
     case RawIdentifier(i) => IdentifierIdentifier(i)
-    case Hole(i) => IdentifierHole(i)
+    case lexical.Hole(i) => IdentifierHole(i)
   })) withFailureMessage {
     (p: Position) => withPos("Identifier expected.", p)
   }

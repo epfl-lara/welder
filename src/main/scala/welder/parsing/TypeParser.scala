@@ -20,7 +20,7 @@ class TypeParser(val program: InoxProgram) extends StdTokenParsers with Position
   }
 
   import tir._
-  import lexical._
+  import lexical.{Hole => _, _}
 
   val symbols = program.symbols
 
@@ -74,6 +74,7 @@ class TypeParser(val program: InoxProgram) extends StdTokenParsers with Position
     case RawType(t) => Literal(EmbeddedType(t))
     case RawIdentifier(i) => Literal(EmbeddedIdentifier(i))
     case lexical.Identifier(s) => Literal(Name(s))
+    case lexical.Hole(i) => Hole(i)
   }))
 
   lazy val appliedType: Parser[Expression] = for {

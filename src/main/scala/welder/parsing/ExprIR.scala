@@ -56,6 +56,4 @@ class ExprIR(val program: InoxProgram) extends IR {
   case object Forall extends Quantifier
   case object Exists extends Quantifier
   case object Choose extends Quantifier
-
-  case class ExpressionHole(index: Int) extends Expression("Hole")
 }
