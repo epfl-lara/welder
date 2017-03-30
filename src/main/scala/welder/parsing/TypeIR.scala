@@ -5,7 +5,7 @@ import inox._
 
 import scala.util.parsing.input.Position
 
-trait TypeIR extends IR {
+trait TypeIR extends IR { self =>
 
   val trees: inox.ast.Trees
   val symbols: trees.Symbols
@@ -26,6 +26,12 @@ trait TypeIR extends IR {
   case object Arrow extends Operator
 
   object BVType {
+    def apply(size: Int): String = {
+      require(size > 0)
+
+      "Int" + size
+    }
+
     def unapply(name: String): Option[trees.Type] = {
       if (name.startsWith("Int")) {
         scala.util.Try(name.drop(3).toInt).toOption.filter(_ > 0).map(trees.BVType(_))
@@ -44,6 +50,8 @@ trait TypeIR extends IR {
     "Real"    -> trees.RealType,
     "String"  -> trees.StringType,
     "Unit"    -> trees.UnitType).map({ case (n, v) => Name(n) -> v }).toMap
+
+  lazy val basicInv = basic.map(_.swap)
 
   lazy val parametric: Map[Value, (Int, Seq[trees.Type] => trees.Type)] =
     (primitives ++ adts).toMap
@@ -64,6 +72,25 @@ trait TypeIR extends IR {
   })
 
   import Utils.{either, traverse, plural}
+
+  object constructors {
+    val BooleanType: Expression = Literal(Name("Boolean"))
+    val IntegerType: Expression = Literal(Name("BagInt"))
+    val CharType: Expression = Literal(Name("Char"))
+    val RealType: Expression = Literal(Name("Real"))
+    val StringType: Expression = Literal(Name("String"))
+    val UnitType: Expression = Literal(Name("Unit"))
+    def BVType(size: Int): Expression = Literal(Name(self.BVType(size)))
+    def FunctionType(froms: Seq[Expression], to: Expression): Expression = froms match {
+      case Seq(from) => Operation(Arrow, Seq(from, to))
+      case _ => Operation(Arrow, Seq(Operation(Group, froms), to))
+    }
+    def TupleType(ts: Seq[Expression]): Expression = Operation(Tuple, ts)
+    def SetType(t: Expression): Expression = Application(Literal(Name("Set")), Seq(t))
+    def BagType(t: Expression): Expression = Application(Literal(Name("Bag")), Seq(t))
+    def MapType(k: Expression, v: Expression): Expression = Application(Literal(Name("Map")), Seq(k, v))
+    def ADTType(i: inox.Identifier, ts: Seq[Expression]) = Application(Literal(EmbeddedIdentifier(i)), ts)
+  }
 
   def toInoxType(expr: Expression): Either[Seq[ErrorLocation], trees.Type] = expr match {
 
