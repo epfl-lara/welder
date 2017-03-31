@@ -10,11 +10,22 @@ trait ExpressionExtractors { self: Interpolator =>
     import program.trees
     import program.symbols
 
+
+    private case class State(local: Store, global: Store)
+
+    private object State {
+      def empty: State = State(Store.empty, Store.empty)
+    }
+
     private sealed abstract class MatchPair
     private case class ExprPair(pair: (trees.Expr, Expression)) extends MatchPair
     private case class TypePair(pair: (trees.Type, Type)) extends MatchPair
     private case class OptTypePair(pair: (trees.Type, Option[Type])) extends MatchPair
     private case class SeqPairs(pairs: Seq[MatchPair]) extends MatchPair
+    private case class WithBindings(bindings: Seq[(inox.Identifier, String)], matchPair: MatchPair) extends MatchPair
+
+    private def withBindings(bindings: Seq[(inox.Identifier, String)])(matchPair: MatchPair): MatchPair = WithBindings(bindings, matchPair)
+    private def withBinding(id: inox.Identifier, name: String)(matchPair: MatchPair): MatchPair = WithBindings(Seq((id, name)), matchPair)
 
     private implicit def toExprPair(pair: (trees.Expr, Expression)): MatchPair = ExprPair(pair)
     private implicit def toTypePair(pair: (trees.Type, Type)): MatchPair = TypePair(pair)
@@ -23,32 +34,45 @@ trait ExpressionExtractors { self: Interpolator =>
     private implicit def toTypePairSeq(pairs: Seq[(trees.Type, Type)]): MatchPair = SeqPairs(pairs.map(TypePair(_)))
     private implicit def toOptTypePairSeq(pairs: Seq[(trees.Type, Option[Type])]): MatchPair = SeqPairs(pairs.map(OptTypePair(_)))
 
-    private def extract(pairs: MatchPair*)(implicit store: Store): Option[(Store, Match)] = {
+    private def extract(pairs: MatchPair*)(implicit state: State): Option[(Store, Match)] = {
 
-      val zero: Option[(Store, Match)] = Some((store, empty))
+      val zero: Option[(Store, Match)] = Some((state.global, empty))
 
-      val optStoreMatchings = pairs.foldLeft(zero) {
+      pairs.foldLeft(zero) {
         case (None, _) => None
-        case (Some((storeAcc, matchingsAcc)), pair) => {
+        case (Some((globalAcc, matchingsAcc)), pair) => {
 
-          val optNewStoreAndMatchings = pair match {
-            case ExprPair((expr, template)) => extractOne(expr, template)(storeAcc)
-            case TypePair((tpe, template)) => TypeIR.extract(tpe, template).map((storeAcc, _))
-            case OptTypePair((tpe, None)) => Some((storeAcc, empty))
-            case OptTypePair((tpe, Some(template))) => TypeIR.extract(tpe, template).map((storeAcc, _))
+          val optNewGlobalAndMatchings = pair match {
+
+            case ExprPair((expr, template)) => 
+              extractOne(expr, template)(State(state.local, globalAcc))
+
+            case TypePair((tpe, template)) => 
+              TypeIR.extract(tpe, template).map((globalAcc, _))
+
+            case OptTypePair((tpe, None)) => Some((globalAcc, empty))
+
+            case OptTypePair((tpe, Some(template))) => TypeIR.extract(tpe, template).map((globalAcc, _))
+
             case SeqPairs(pairs) => extract(pairs : _*)
+
+            case WithBindings(bindings, matchPair) => {
+              val newLocal = bindings.foldLeft(state.local) {
+                case (currentStore, (id, name)) => currentStore.add(id, name)
+              }
+
+              extract(matchPair)(State(newLocal, globalAcc))
+            }
           }
 
-          optNewStoreAndMatchings map {
-            case (newStore, extraMatchings) => (newStore, matchingsAcc ++ extraMatchings)
+          optNewGlobalAndMatchings map {
+            case (newGlobal, extraMatchings) => (newGlobal, matchingsAcc ++ extraMatchings)
           }
         }
       }
-
-      optStoreMatchings
     }
 
-    class Store(val inoxToIr: Map[inox.Identifier, String], val irToInox: Map[String, inox.Identifier]) {
+    private class Store(val inoxToIr: Map[inox.Identifier, String], val irToInox: Map[String, inox.Identifier]) {
 
       override def toString = inoxToIr.toString + "\n" + irToInox.toString
 
@@ -74,14 +98,15 @@ trait ExpressionExtractors { self: Interpolator =>
       }
     }
 
-    object Store {
+    private object Store {
       val empty = new Store(Map(), Map())
     }
 
-    def extract(expr: trees.Expr, template: Expression): Option[Match] = extract(expr -> template)(Store.empty).map(_._2)
+    def extract(expr: trees.Expr, template: Expression): Option[Match] = extract(expr -> template)(State.empty).map(_._2)
 
-    private def extractOne(expr: trees.Expr, template: Expression)(implicit store: Store): Option[(Store, Match)] = {
+    private def extractOne(expr: trees.Expr, template: Expression)(implicit state: State): Option[(Store, Match)] = {
 
+      val store = state.global
       val success = Some((store, empty))
 
       template match {
@@ -99,16 +124,25 @@ trait ExpressionExtractors { self: Interpolator =>
         case trees.Variable(inoxId, _, _) => template match {
           case Variable(id) => {
             val name = id.getName
-            (store.get(name), store.get(inoxId)) match {
-              case (Some(`inoxId`), Some(`name`)) => success  // Bound identifier.
-              case (None, None) => Some((store.add(inoxId, name), empty)) // Free identifier.
-              case _ => fail
+            (state.local.get(name), state.local.get(inoxId)) match {
+              case (Some(`inoxId`), Some(`name`)) => success  // Locally bound identifier.
+              case _ => (store.get(name), store.get(inoxId)) match {
+                case (Some(`inoxId`), Some(`name`)) => success  // Globally bound identifier.
+                case (None, None) => Some((store.add(inoxId, name), empty)) // Free identifier. We recorder it in the global store.
+                case _ => fail
+              }
             }
           }
           case _ => fail
         }
 
         // Control structures.
+
+        case trees.IfExpr(cond, thenn, elze) => template match {
+          case Operation("IfThenElse", Seq(templateCond, templateThenn, templateElze)) =>
+            extract(cond -> templateCond, thenn -> templateThenn, elze -> templateElze)
+          case _ => fail
+        }
 
         case trees.Assume(pred, body) => template match {
           case Operation("Assume", Seq(templatePred, templateBody)) =>
@@ -124,46 +158,25 @@ trait ExpressionExtractors { self: Interpolator =>
               case _ => Let(rest, templateBody)
             }
 
-            for {
-              (storeValue, matchingsValue) <- extract(value -> templateValue, vd.tpe -> optTemplateType)
-              (storeBody, matchingsBody) <- extract(body -> templateRest)(storeValue.add(vd.id, templateId.getName))
-            } yield (storeBody, matchingsBody ++ matchingsValue)
+            extract(value -> templateValue, vd.tpe -> optTemplateType, withBinding(vd.id, templateId.getName)(body -> templateRest))
           }
           case _ => fail
         }
 
         case trees.Lambda(args, body) => template match {
-          case Abstraction(Lambda, templateArgs, templateBody) if (args.length == templateArgs.length) => {
-            extract(args.map(_.tpe).zip(templateArgs.map(_._2))) match {
-              case None => None
-              case Some((storeTypes, matchingsTypes)) => {
-                val newStore = args.zip(templateArgs).foldLeft(storeTypes) {
-                  case (currentStore, (vd, (id, _))) => currentStore.add(vd.id, id.getName)
-                }
-
-                extract(body -> templateBody)(newStore) map {
-                  case (finalStore, matchingsBody) => (finalStore, matchingsBody ++ matchingsTypes)
-                }
-              }
-            }
-          }
+          case Abstraction(Lambda, templateArgs, templateBody) if (args.length == templateArgs.length) =>
+            extract(
+              args.map(_.tpe).zip(templateArgs.map(_._2)), 
+              withBindings(args.map(_.id).zip(templateArgs.map(_._1.getName)))(body -> templateBody))
+          case _ => fail
         }
 
         case trees.Forall(args, body) => template match {
-          case Abstraction(Forall, templateArgs, templateBody) if (args.length == templateArgs.length) => {
-            extract(args.map(_.tpe).zip(templateArgs.map(_._2))) match {
-              case None => None
-              case Some((storeTypes, matchingsTypes)) => {
-                val newStore = args.zip(templateArgs).foldLeft(storeTypes) {
-                  case (currentStore, (vd, (id, _))) => currentStore.add(vd.id, id.getName)
-                }
-
-                extract(body -> templateBody)(newStore) map {
-                  case (finalStore, matchingsBody) => (finalStore, matchingsBody ++ matchingsTypes)
-                }
-              }
-            }
-          }
+          case Abstraction(Forall, templateArgs, templateBody) if (args.length == templateArgs.length) =>
+            extract(
+              args.map(_.tpe).zip(templateArgs.map(_._2)), 
+              withBindings(args.map(_.id).zip(templateArgs.map(_._1.getName)))(body -> templateBody))
+          case _ => fail
         }
 
         case trees.Choose(arg, pred) => template match {
@@ -173,22 +186,15 @@ trait ExpressionExtractors { self: Interpolator =>
               case _ => Abstraction(Choose, rest, templatePred)
             }
 
-            extract(arg.tpe -> optTemplateType) match {
-              case None => None
-              case Some((storeType, matchingsType)) => {
-                val newStore = storeType.add(arg.id, id.getName)
-
-                extract(pred -> templateRest)(newStore) map {
-                  case (finalStore, matchingsBody) => (finalStore, matchingsBody ++ matchingsType)
-                }
-              }
-            }
+            extract(arg.tpe -> optTemplateType, withBinding(arg.id, id.getName)(pred -> templateRest))
           }
+          case _ => fail
         }
 
         case trees.Application(callee, args) => template match {
           case Application(templateCallee, templateArgs) if (args.length == templateArgs.length) =>
             extract(callee -> templateCallee, args.zip(templateArgs))
+          case _ => fail
         }
 
         // Various.
