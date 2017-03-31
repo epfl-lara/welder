@@ -23,44 +23,173 @@ trait ExpressionExtractors { self: Interpolator =>
     private implicit def toTypePairSeq(pairs: Seq[(trees.Type, Type)]): MatchPair = SeqPairs(pairs.map(TypePair(_)))
     private implicit def toOptTypePairSeq(pairs: Seq[(trees.Type, Option[Type])]): MatchPair = SeqPairs(pairs.map(OptTypePair(_)))
 
-    private def extract(pairs: MatchPair*)(implicit store: Store): Option[Match] = {
-      Utils.traverse(pairs.map({
-        case ExprPair((expr, template)) => extractOne(expr, template)
-        case TypePair((tpe, template)) => TypeIR.extract(tpe, template)
-        case OptTypePair((tpe, None)) => success
-        case OptTypePair((tpe, Some(template))) => TypeIR.extract(tpe, template)
-        case SeqPairs(pairs) => extract(pairs : _*)
-      })).map(_.fold(empty)(_ ++ _))
+    private def extract(pairs: MatchPair*)(implicit store: Store): Option[(Store, Match)] = {
+
+      val zero: Option[(Store, Match)] = Some((store, empty))
+
+      val optStoreMatchings = pairs.foldLeft(zero) {
+        case (None, _) => None
+        case (Some((storeAcc, matchingsAcc)), pair) => {
+
+          val optNewStoreAndMatchings = pair match {
+            case ExprPair((expr, template)) => extractOne(expr, template)(storeAcc)
+            case TypePair((tpe, template)) => TypeIR.extract(tpe, template).map((storeAcc, _))
+            case OptTypePair((tpe, None)) => Some((storeAcc, empty))
+            case OptTypePair((tpe, Some(template))) => TypeIR.extract(tpe, template).map((storeAcc, _))
+            case SeqPairs(pairs) => extract(pairs : _*)
+          }
+
+          optNewStoreAndMatchings map {
+            case (newStore, extraMatchings) => (newStore, matchingsAcc ++ extraMatchings)
+          }
+        }
+      }
+
+      optStoreMatchings
     }
 
-    abstract class Store {
-      val inoxToIr: Map[inox.Identifier, String]
-      val irToInox: Map[String, inox.Identifier]
+    class Store(val inoxToIr: Map[inox.Identifier, String], val irToInox: Map[String, inox.Identifier]) {
+
+      override def toString = inoxToIr.toString + "\n" + irToInox.toString
 
       def get(id: inox.Identifier): Option[String] = inoxToIr.get(id)
       def get(name: String): Option[inox.Identifier] = irToInox.get(name)
-    }
 
-    object Store {
-      val empty = new Store {
-        val inoxToIr: Map[inox.Identifier, String] = Map()
-        val irToInox: Map[String, inox.Identifier] = Map()
+      def add(id: inox.Identifier, name: String): Store = {
+
+        val optOldName = inoxToIr.get(id)
+        val optOldId = irToInox.get(name)
+
+        val newIrToInox = optOldName match {
+          case None => irToInox + ((name -> id))
+          case Some(oldName) => irToInox - oldName + ((name -> id))
+        }
+
+        val newInoxToIR = optOldId match {
+          case None => inoxToIr + ((id -> name))
+          case Some(oldId) => inoxToIr - oldId + ((id -> name))
+        }
+        
+        new Store(newInoxToIR, newIrToInox)
       }
     }
 
-    def extract(expr: trees.Expr, template: Expression): Option[Match] = extract(expr -> template)(Store.empty)
+    object Store {
+      val empty = new Store(Map(), Map())
+    }
 
-    private def extractOne(expr: trees.Expr, template: Expression)(implicit store: Store): Option[Match] = {
+    def extract(expr: trees.Expr, template: Expression): Option[Match] = extract(expr -> template)(Store.empty).map(_._2)
+
+    private def extractOne(expr: trees.Expr, template: Expression)(implicit store: Store): Option[(Store, Match)] = {
+
+      val success = Some((store, empty))
 
       template match {
         case Hole(index) =>
-          return Some(Map(index -> expr))
+          return Some((store, Map(index -> expr)))
         case TypeApplication(Operation("TypeAnnotation", Seq(templateInner)), Seq(templateType)) =>
           return extract(expr.getType -> templateType, expr -> templateInner)
         case _ => ()
       }
 
       expr match {
+
+        // Variables
+
+        case trees.Variable(inoxId, _, _) => template match {
+          case Variable(id) => {
+            val name = id.getName
+            (store.get(name), store.get(inoxId)) match {
+              case (Some(`inoxId`), Some(`name`)) => success  // Bound identifier.
+              case (None, None) => Some((store.add(inoxId, name), empty)) // Free identifier.
+              case _ => fail
+            }
+          }
+          case _ => fail
+        }
+
+        // Control structures.
+
+        case trees.Assume(pred, body) => template match {
+          case Operation("Assume", Seq(templatePred, templateBody)) =>
+            extract(pred -> templatePred, body -> templateBody)
+          case _ => fail
+        }
+
+        case trees.Let(vd, value, body) => template match {
+          case Let(Seq((templateId, optTemplateType, templateValue), rest @ _*), templateBody) => {
+
+            val templateRest = rest match {
+              case Seq() => templateBody
+              case _ => Let(rest, templateBody)
+            }
+
+            for {
+              (storeValue, matchingsValue) <- extract(value -> templateValue, vd.tpe -> optTemplateType)
+              (storeBody, matchingsBody) <- extract(body -> templateRest)(storeValue.add(vd.id, templateId.getName))
+            } yield (storeBody, matchingsBody ++ matchingsValue)
+          }
+          case _ => fail
+        }
+
+        case trees.Lambda(args, body) => template match {
+          case Abstraction(Lambda, templateArgs, templateBody) if (args.length == templateArgs.length) => {
+            extract(args.map(_.tpe).zip(templateArgs.map(_._2))) match {
+              case None => None
+              case Some((storeTypes, matchingsTypes)) => {
+                val newStore = args.zip(templateArgs).foldLeft(storeTypes) {
+                  case (currentStore, (vd, (id, _))) => currentStore.add(vd.id, id.getName)
+                }
+
+                extract(body -> templateBody)(newStore) map {
+                  case (finalStore, matchingsBody) => (finalStore, matchingsBody ++ matchingsTypes)
+                }
+              }
+            }
+          }
+        }
+
+        case trees.Forall(args, body) => template match {
+          case Abstraction(Forall, templateArgs, templateBody) if (args.length == templateArgs.length) => {
+            extract(args.map(_.tpe).zip(templateArgs.map(_._2))) match {
+              case None => None
+              case Some((storeTypes, matchingsTypes)) => {
+                val newStore = args.zip(templateArgs).foldLeft(storeTypes) {
+                  case (currentStore, (vd, (id, _))) => currentStore.add(vd.id, id.getName)
+                }
+
+                extract(body -> templateBody)(newStore) map {
+                  case (finalStore, matchingsBody) => (finalStore, matchingsBody ++ matchingsTypes)
+                }
+              }
+            }
+          }
+        }
+
+        case trees.Choose(arg, pred) => template match {
+          case Abstraction(Choose, Seq((id, optTemplateType), rest @ _*), templatePred) => {
+            val templateRest = rest match {
+              case Seq() => templatePred
+              case _ => Abstraction(Choose, rest, templatePred)
+            }
+
+            extract(arg.tpe -> optTemplateType) match {
+              case None => None
+              case Some((storeType, matchingsType)) => {
+                val newStore = storeType.add(arg.id, id.getName)
+
+                extract(pred -> templateRest)(newStore) map {
+                  case (finalStore, matchingsBody) => (finalStore, matchingsBody ++ matchingsType)
+                }
+              }
+            }
+          }
+        }
+
+        case trees.Application(callee, args) => template match {
+          case Application(templateCallee, templateArgs) if (args.length == templateArgs.length) =>
+            extract(callee -> templateCallee, args.zip(templateArgs))
+        }
 
         // Various.
 
