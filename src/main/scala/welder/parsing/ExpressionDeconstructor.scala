@@ -288,21 +288,40 @@ trait ExpressionDeconstructors { self: Interpolator =>
       }
     }
 
+    object BagUnionOperation {
+      def unapply(expr: Expression): Option[(Expression, Expression, Option[Type])] = expr match {
+        case PrimitiveFunction(bi.BagUnion, _, Seq(bag1, bag2), otpes) if (otpes.isEmpty || otpes.get.length == 1) =>
+          Some((bag1, bag2, otpes.map(_.head)))
+        case _ => None
+      }
+    }
+
+    object BagIntersectionOperation {
+      def unapply(expr: Expression): Option[(Expression, Expression, Option[Type])] = expr match {
+        case PrimitiveFunction(bi.BagIntersection, _, Seq(bag1, bag2), otpes) if (otpes.isEmpty || otpes.get.length == 1) =>
+          Some((bag1, bag2, otpes.map(_.head)))
+        case _ => None
+      }
+    }
+
+    object BagDifferenceOperation {
+      def unapply(expr: Expression): Option[(Expression, Expression, Option[Type])] = expr match {
+        case PrimitiveFunction(bi.BagDifference, _, Seq(bag1, bag2), otpes) if (otpes.isEmpty || otpes.get.length == 1) =>
+          Some((bag1, bag2, otpes.map(_.head)))
+        case _ => None
+      }
+    }
+
     object BagBinaryOperation {
 
       def unapply(expr: Expression): Option[(Expression, Expression, (trees.Expr, trees.Expr) => trees.Expr, Option[Type])] = expr match {
-        case PrimitiveFunction(BagBinFun(f), _, Seq(bag1, bag2), otpes) if (otpes.isEmpty || otpes.get.length == 1) =>
-          Some((bag1, bag2, f, otpes.map(_.head)))
+        case BagUnionOperation(bag1, bag2, otpe) =>
+          Some((bag1, bag2, { (b1: trees.Expr, b2: trees.Expr) => trees.BagUnion(b1, b2) }, otpe))
+        case BagIntersectionOperation(bag1, bag2, otpe) =>
+          Some((bag1, bag2, { (b1: trees.Expr, b2: trees.Expr) => trees.BagIntersection(b1, b2) }, otpe))
+        case BagDifferenceOperation(bag1, bag2, otpe) =>
+          Some((bag1, bag2, { (b1: trees.Expr, b2: trees.Expr) => trees.BagDifference(b1, b2) }, otpe))
         case _ => None
-      }
-
-      object BagBinFun {
-        def unapply(builtIn: bi.BuiltIn): Option[(trees.Expr, trees.Expr) => trees.Expr] = builtIn match {
-          case bi.BagUnion => Some((map1: trees.Expr, map2: trees.Expr) => trees.BagUnion(map1, map2))
-          case bi.BagIntersection => Some((map1: trees.Expr, map2: trees.Expr) => trees.BagIntersection(map1, map2))
-          case bi.BagDifference => Some((map1: trees.Expr, map2: trees.Expr) => trees.BagDifference(map1, map2))
-          case _ => None
-        }
       }
     }
 

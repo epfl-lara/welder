@@ -192,7 +192,55 @@ trait ExpressionExtractors { self: Interpolator =>
         }
 
         case trees.BVNot(inner) => template match {
-          case Operation("~", Seq(templateInner)) => extract(inner, templateInner)
+          case Operation("~", Seq(templateInner)) => extract(inner -> templateInner)
+          case _ => fail
+        }
+
+        case trees.BVOr(left, right) => template match {
+          case Operation("|", Seq(templateLeft, templateRight)) =>
+            extract(left -> templateLeft, right -> templateRight)
+        }
+
+        case trees.BVAnd(left, right) => template match {
+          case Operation("&", Seq(templateLeft, templateRight)) =>
+            extract(left -> templateLeft, right -> templateRight)
+          case _ => fail
+        }
+
+        case trees.BVXor(left, right) => template match {
+          case Operation("^", Seq(templateLeft, templateRight)) =>
+            extract(left -> templateLeft, right -> templateRight)
+          case _ => fail
+        }
+
+        case trees.BVShiftLeft(left, right) => template match {
+          case Operation("<<", Seq(templateLeft, templateRight)) =>
+            extract(left -> templateLeft, right -> templateRight)
+          case _ => fail
+        }
+
+        case trees.BVAShiftRight(left, right) => template match {
+          case Operation(">>", Seq(templateLeft, templateRight)) =>
+            extract(left -> templateLeft, right -> templateRight)
+          case _ => fail
+        }
+
+        case trees.BVLShiftRight(left, right) => template match {
+          case Operation(">>>", Seq(templateLeft, templateRight)) =>
+            extract(left -> templateLeft, right -> templateRight)
+          case _ => fail
+        }
+
+        // Tuples.
+
+        case trees.Tuple(exprs) => template match {
+          case Operation("Tuple", templates) if (exprs.length == templates.length) =>
+            extract(exprs.zip(templates))
+          case _ => fail
+        }
+
+        case trees.TupleSelect(inner, index) => template match {
+          case Selection(templateInner, TupleField(`index`)) => extract(inner -> templateInner)
           case _ => fail
         }
 
@@ -231,6 +279,85 @@ trait ExpressionExtractors { self: Interpolator =>
         case trees.SetDifference(left, right) => (left.getType(symbols), template) match {
           case (trees.SetType(tpe), SetDifferenceOperation(templateLeft, templateRight, optTemplateType)) =>
             extract(left -> templateLeft, right -> templateRight, tpe -> optTemplateType)
+          case _ => fail
+        }
+
+        // Bags.
+
+        case trees.FiniteBag(mappings, tpe) => template match {
+          case BagConstruction(Bindings(Seq(), templateMappings), optTemplateType) if (mappings.length == templateMappings.length) => {
+            val (keys, values) = mappings.unzip
+            val (templatesKeys, templatesValues) = templateMappings.unzip
+
+            extract(keys.zip(templatesKeys), values.zip(templatesValues), tpe -> optTemplateType)
+          }
+          case _ => fail
+        }
+
+        case trees.MultiplicityInBag(element, bag) => (bag.getType, template) match {
+          case (trees.BagType(tpe), BagMultiplicityOperation(templateBag, templateElement, optTemplateType)) =>
+            extract(element -> templateElement, bag -> templateBag, tpe -> optTemplateType)
+          case _ => fail
+        }
+
+        case trees.BagIntersection(left, right) => (left.getType, template) match {
+          case (trees.BagType(tpe), BagIntersectionOperation(templateLeft, templateRight, optTemplateType)) =>
+            extract(left -> templateLeft, right -> templateRight, tpe -> optTemplateType)
+          case _ => fail
+        }
+
+        case trees.BagUnion(left, right) => (left.getType, template) match {
+          case (trees.BagType(tpe), BagUnionOperation(templateLeft, templateRight, optTemplateType)) =>
+            extract(left -> templateLeft, right -> templateRight, tpe -> optTemplateType)
+          case _ => fail
+        }
+
+        case trees.BagDifference(left, right) => (left.getType, template) match {
+          case (trees.BagType(tpe), BagDifferenceOperation(templateLeft, templateRight, optTemplateType)) =>
+            extract(left -> templateLeft, right -> templateRight, tpe -> optTemplateType)
+          case _ => fail
+        }
+
+        // Maps.
+
+        case trees.FiniteMap(pairs, default, keyType, valueType) => template match {
+          case MapConstruction(templateDefault, Bindings(Seq(), templatesPairs), optTemplatesTypes) if (pairs.length == templatesPairs.length) => {
+
+            val (optTemplateKeyType, optTemplateValueType) = optTemplatesTypes match {
+              case Some(Right((k, v))) => (Some(k), Some(v))
+              case Some(Left(k)) => (Some(k), None)
+              case None => (None, None) 
+            }
+
+            val (keys, values) = pairs.unzip
+            val (templatesKeys, templatesValues) = templatesPairs.unzip
+
+            extract(keys.zip(templatesKeys), values.zip(templatesValues), keyType -> optTemplateKeyType, valueType -> optTemplateValueType, default -> templateDefault)
+          }
+          case _ => fail
+        }
+
+        case trees.MapApply(map, key) => (map.getType, template) match {
+          case (trees.MapType(keyType, valueType), MapApplyOperation(templateMap, templateKey, optTemplatesTypes)) => {
+            val (optTemplateKeyType, optTemplateValueType) = optTemplatesTypes match {
+              case Some((k, v)) => (Some(k), Some(v))
+              case None => (None, None)
+            }
+
+            extract(map -> templateMap, key -> templateKey, keyType -> optTemplateKeyType, valueType -> optTemplateValueType)
+          }
+          case _ => fail
+        }
+
+        case trees.MapUpdated(map, key, value) => (map.getType, template) match {
+          case (trees.MapType(keyType, valueType), MapUpdatedOperation(templateMap, templateKey, templateValue, optTemplatesTypes)) => {
+            val (optTemplateKeyType, optTemplateValueType) = optTemplatesTypes match {
+              case Some((k, v)) => (Some(k), Some(v))
+              case None => (None, None)
+            }
+
+            extract(map -> templateMap, key -> templateKey, keyType -> optTemplateKeyType, value -> templateValue, valueType -> optTemplateValueType)
+          }
           case _ => fail
         }
 
