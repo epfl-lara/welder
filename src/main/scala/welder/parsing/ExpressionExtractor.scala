@@ -126,11 +126,12 @@ trait ExpressionExtractors { self: Interpolator =>
             val name = id.getName
             (state.local.get(name), state.local.get(inoxId)) match {
               case (Some(`inoxId`), Some(`name`)) => success  // Locally bound identifier.
-              case _ => (store.get(name), store.get(inoxId)) match {
+              case (None, None) => (store.get(name), store.get(inoxId)) match {
                 case (Some(`inoxId`), Some(`name`)) => success  // Globally bound identifier.
                 case (None, None) => Some((store.add(inoxId, name), empty)) // Free identifier. We recorder it in the global store.
                 case _ => fail
               }
+              case _ => fail
             }
           }
           case _ => fail
