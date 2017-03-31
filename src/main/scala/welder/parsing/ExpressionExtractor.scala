@@ -23,9 +23,9 @@ trait ExpressionExtractors { self: Interpolator =>
     private implicit def toTypePairSeq(pairs: Seq[(trees.Type, Type)]): MatchPair = SeqPairs(pairs.map(TypePair(_)))
     private implicit def toOptTypePairSeq(pairs: Seq[(trees.Type, Option[Type])]): MatchPair = SeqPairs(pairs.map(OptTypePair(_)))
 
-    private def extract(pairs: MatchPair*)(implicit store: Map[String, inox.Identifier]): Option[Match] = {
+    private def extract(pairs: MatchPair*)(implicit store: Store): Option[Match] = {
       Utils.traverse(pairs.map({
-        case ExprPair((expr, template)) => extract(expr, template)
+        case ExprPair((expr, template)) => extractOne(expr, template)
         case TypePair((tpe, template)) => TypeIR.extract(tpe, template)
         case OptTypePair((tpe, None)) => success
         case OptTypePair((tpe, Some(template))) => TypeIR.extract(tpe, template)
@@ -33,7 +33,24 @@ trait ExpressionExtractors { self: Interpolator =>
       })).map(_.fold(empty)(_ ++ _))
     }
 
-    def extract(expr: trees.Expr, template: Expression)(implicit store: Map[String, inox.Identifier]): Option[Match] = {
+    abstract class Store {
+      val inoxToIr: Map[inox.Identifier, String]
+      val irToInox: Map[String, inox.Identifier]
+
+      def get(id: inox.Identifier): Option[String] = inoxToIr.get(id)
+      def get(name: String): Option[inox.Identifier] = irToInox.get(name)
+    }
+
+    object Store {
+      val empty = new Store {
+        val inoxToIr: Map[inox.Identifier, String] = Map()
+        val irToInox: Map[String, inox.Identifier] = Map()
+      }
+    }
+
+    def extract(expr: trees.Expr, template: Expression): Option[Match] = extract(expr -> template)(Store.empty)
+
+    private def extractOne(expr: trees.Expr, template: Expression)(implicit store: Store): Option[Match] = {
 
       template match {
         case Hole(index) =>
@@ -89,7 +106,7 @@ trait ExpressionExtractors { self: Interpolator =>
         }
 
         case trees.Not(inner) => template match {
-          case Operation("!", Seq(templateInner)) => extract(inner, templateInner)
+          case Operation("!", Seq(templateInner)) => extract(inner -> templateInner)
           case _ => fail
         }
 
@@ -113,7 +130,7 @@ trait ExpressionExtractors { self: Interpolator =>
         }
 
         case trees.StringLength(string) => template match {
-          case StringLengthOperation(templateString) => extract(string, templateString)
+          case StringLengthOperation(templateString) => extract(string -> templateString)
           case _ => fail
         }
 
@@ -134,50 +151,60 @@ trait ExpressionExtractors { self: Interpolator =>
             extract(left -> templateLeft, right -> templateRight)
           case _ => fail
         }
+
         case trees.Minus(left, right) => template match {
           case Operation("-", Seq(templateLeft, templateRight)) =>
             extract(left -> templateLeft, right -> templateRight)
           case _ => fail
         }
+
         case trees.Times(left, right) => template match {
           case Operation("*", Seq(templateLeft, templateRight)) =>
             extract(left -> templateLeft, right -> templateRight)
           case _ => fail
         }
+
         case trees.Division(left, right) => template match {
           case Operation("/", Seq(templateLeft, templateRight)) =>
             extract(left -> templateLeft, right -> templateRight)
           case _ => fail
         }
+
         case trees.UMinus(inner) => template match {
-          case Operation("-", Seq(templateInner)) => extract(inner, templateInner)
+          case Operation("-", Seq(templateInner)) => extract(inner -> templateInner)
           case _ => fail
         }
+
         case trees.Remainder(left, right) => template match {
           case Operation("%", Seq(templateLeft, templateRight)) =>
             extract(left -> templateLeft, right -> templateRight)
           case _ => fail
         }
+
         case trees.Modulo(left, right) => template match {
           case Operation("mod", Seq(templateLeft, templateRight)) =>
             extract(left -> templateLeft, right -> templateRight)
           case _ => fail
         }
+
         case trees.LessThan(left, right) => template match {
           case Operation("<", Seq(templateLeft, templateRight)) =>
             extract(left -> templateLeft, right -> templateRight)
           case _ => fail
         }
+
         case trees.GreaterThan(left, right) => template match {
           case Operation(">", Seq(templateLeft, templateRight)) =>
             extract(left -> templateLeft, right -> templateRight)
           case _ => fail
         }
+
         case trees.LessEquals(left, right) => template match {
           case Operation("<=", Seq(templateLeft, templateRight)) =>
             extract(left -> templateLeft, right -> templateRight)
           case _ => fail
         }
+
         case trees.GreaterEquals(left, right) => template match {
           case Operation(">=", Seq(templateLeft, templateRight)) =>
             extract(left -> templateLeft, right -> templateRight)

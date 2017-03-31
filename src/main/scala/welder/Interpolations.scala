@@ -31,7 +31,7 @@ trait Interpolations { self: Theory =>
       def unapplySeq(expr: Expr): Option[Seq[Any]] = {
         val args = Seq.tabulate(sc.parts.length - 1)(MatchPosition(_))
         val ir = parser.getFromSC(sc, args)(parser.phrase(parser.expression))
-        ExprIR.extract(expr, ir)(Map()) match {
+        ExprIR.extract(expr, ir) match {
           case Some(mappings) if mappings.size == sc.parts.length - 1 => Some(mappings.toSeq.sortBy(_._1).map(_._2))
           case _ => None
         }
