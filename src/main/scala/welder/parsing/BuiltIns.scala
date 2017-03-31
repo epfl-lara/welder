@@ -40,7 +40,7 @@ trait BuiltIns { self: Interpolator =>
 
     case object MapConstructor extends BuiltIn(None, 2) with Constructor
     case object MapApply extends BuiltIn(Some(2), 2)
-    case object MapUpdated extends BuiltIn(Some(2), 3)
+    case object MapUpdated extends BuiltIn(Some(3), 2)
 
     val names: Map[String, BuiltIn]
 
