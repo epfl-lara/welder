@@ -17,24 +17,24 @@ trait ExpressionExtractors { self: Interpolator =>
       def empty: State = State(Store.empty, Store.empty)
     }
 
-    private sealed abstract class MatchPair
-    private case class ExprPair(pair: (trees.Expr, Expression)) extends MatchPair
-    private case class TypePair(pair: (trees.Type, Type)) extends MatchPair
-    private case class OptTypePair(pair: (trees.Type, Option[Type])) extends MatchPair
-    private case class SeqPairs(pairs: Seq[MatchPair]) extends MatchPair
-    private case class WithBindings(bindings: Seq[(inox.Identifier, String)], matchPair: MatchPair) extends MatchPair
+    private sealed abstract class MatchObligation
+    private case class ExprMatch(expr: trees.Expr, template: Expression) extends MatchObligation
+    private case class TypeMatch(tpe: trees.Type, template: Type) extends MatchObligation
+    private case class OptTypeMatch(tpe: trees.Type, optTemplate: Option[Type]) extends MatchObligation
+    private case class MultipleObligations(pairs: Seq[MatchObligation]) extends MatchObligation
+    private case class WithBindings(bindings: Seq[(inox.Identifier, String)], obligation: MatchObligation) extends MatchObligation
 
-    private def withBindings(bindings: Seq[(inox.Identifier, String)])(matchPair: MatchPair): MatchPair = WithBindings(bindings, matchPair)
-    private def withBinding(id: inox.Identifier, name: String)(matchPair: MatchPair): MatchPair = WithBindings(Seq((id, name)), matchPair)
+    private def withBindings(bindings: Seq[(inox.Identifier, String)])(obligation: MatchObligation): MatchObligation = WithBindings(bindings, obligation)
+    private def withBinding(id: inox.Identifier, name: String)(obligation: MatchObligation): MatchObligation = WithBindings(Seq((id, name)), obligation)
 
-    private implicit def toExprPair(pair: (trees.Expr, Expression)): MatchPair = ExprPair(pair)
-    private implicit def toTypePair(pair: (trees.Type, Type)): MatchPair = TypePair(pair)
-    private implicit def toOptTypePair(pair: (trees.Type, Option[Type])): MatchPair = OptTypePair(pair)
-    private implicit def toExprPairSeq(pairs: Seq[(trees.Expr, Expression)]): MatchPair = SeqPairs(pairs.map(ExprPair(_)))
-    private implicit def toTypePairSeq(pairs: Seq[(trees.Type, Type)]): MatchPair = SeqPairs(pairs.map(TypePair(_)))
-    private implicit def toOptTypePairSeq(pairs: Seq[(trees.Type, Option[Type])]): MatchPair = SeqPairs(pairs.map(OptTypePair(_)))
+    private implicit def toExprPair(pair: (trees.Expr, Expression)): MatchObligation = ExprMatch(pair._1, pair._2)
+    private implicit def toTypePair(pair: (trees.Type, Type)): MatchObligation = TypeMatch(pair._1, pair._2)
+    private implicit def toOptTypePair(pair: (trees.Type, Option[Type])): MatchObligation = OptTypeMatch(pair._1, pair._2)
+    private implicit def toExprPairSeq(pairs: Seq[(trees.Expr, Expression)]): MatchObligation = MultipleObligations(pairs.map(toExprPair(_)))
+    private implicit def toTypePairSeq(pairs: Seq[(trees.Type, Type)]): MatchObligation = MultipleObligations(pairs.map(toTypePair(_)))
+    private implicit def toOptTypePairSeq(pairs: Seq[(trees.Type, Option[Type])]): MatchObligation = MultipleObligations(pairs.map(toOptTypePair(_)))
 
-    private def extract(pairs: MatchPair*)(implicit state: State): Option[(Store, Match)] = {
+    private def extract(pairs: MatchObligation*)(implicit state: State): Option[(Store, Match)] = {
 
       val zero: Option[(Store, Match)] = Some((state.global, empty))
 
@@ -44,17 +44,17 @@ trait ExpressionExtractors { self: Interpolator =>
 
           val optNewGlobalAndMatchings = pair match {
 
-            case ExprPair((expr, template)) => 
+            case ExprMatch(expr, template) => 
               extractOne(expr, template)(State(state.local, globalAcc))
 
-            case TypePair((tpe, template)) => 
+            case TypeMatch(tpe, template) => 
               TypeIR.extract(tpe, template).map((globalAcc, _))
 
-            case OptTypePair((tpe, None)) => Some((globalAcc, empty))
+            case OptTypeMatch(tpe, None) => Some((globalAcc, empty))
 
-            case OptTypePair((tpe, Some(template))) => TypeIR.extract(tpe, template).map((globalAcc, _))
+            case OptTypeMatch(tpe, Some(template)) => TypeIR.extract(tpe, template).map((globalAcc, _))
 
-            case SeqPairs(pairs) => extract(pairs : _*)
+            case MultipleObligations(pairs) => extract(pairs : _*)
 
             case WithBindings(bindings, matchPair) => {
               val newLocal = bindings.foldLeft(state.local) {
