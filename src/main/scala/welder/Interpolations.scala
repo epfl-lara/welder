@@ -16,12 +16,11 @@ trait Interpolations { self: Theory =>
   lazy val interpolator = new Interpolator {
     override val program = self.program
   }
+  import interpolator._
+
+  private lazy val parser = new ExpressionParser()
 
   implicit class ExpressionInterpolator(sc: StringContext) {
-
-    import interpolator._
-
-    private val parser = new ExpressionParser()
 
     object e {
       def apply(args: Any*): Expr = {
