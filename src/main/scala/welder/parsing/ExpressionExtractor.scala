@@ -27,12 +27,12 @@ trait ExpressionExtractors { self: Interpolator =>
     private def withBindings(bindings: Seq[(inox.Identifier, String)])(obligation: MatchObligation): MatchObligation = WithBindings(bindings, obligation)
     private def withBinding(id: inox.Identifier, name: String)(obligation: MatchObligation): MatchObligation = WithBindings(Seq((id, name)), obligation)
 
-    private implicit def toExprPair(pair: (trees.Expr, Expression)): MatchObligation = ExprMatch(pair._1, pair._2)
-    private implicit def toTypePair(pair: (trees.Type, Type)): MatchObligation = TypeMatch(pair._1, pair._2)
-    private implicit def toOptTypePair(pair: (trees.Type, Option[Type])): MatchObligation = OptTypeMatch(pair._1, pair._2)
-    private implicit def toExprPairSeq(pairs: Seq[(trees.Expr, Expression)]): MatchObligation = MultipleObligations(pairs.map(toExprPair(_)))
-    private implicit def toTypePairSeq(pairs: Seq[(trees.Type, Type)]): MatchObligation = MultipleObligations(pairs.map(toTypePair(_)))
-    private implicit def toOptTypePairSeq(pairs: Seq[(trees.Type, Option[Type])]): MatchObligation = MultipleObligations(pairs.map(toOptTypePair(_)))
+    private implicit def toExprObligation(pair: (trees.Expr, Expression)): MatchObligation = ExprMatch(pair._1, pair._2)
+    private implicit def toTypeObligation(pair: (trees.Type, Type)): MatchObligation = TypeMatch(pair._1, pair._2)
+    private implicit def toOptTypeObligation(pair: (trees.Type, Option[Type])): MatchObligation = OptTypeMatch(pair._1, pair._2)
+    private implicit def toExprObligations(pairs: Seq[(trees.Expr, Expression)]): MatchObligation = MultipleObligations(pairs.map(toExprObligation(_)))
+    private implicit def toTypeObligations(pairs: Seq[(trees.Type, Type)]): MatchObligation = MultipleObligations(pairs.map(toTypeObligation(_)))
+    private implicit def toOptTypeObligations(pairs: Seq[(trees.Type, Option[Type])]): MatchObligation = MultipleObligations(pairs.map(toOptTypeObligation(_)))
 
     private def extract(pairs: MatchObligation*)(implicit state: State): Option[(Store, Match)] = {
 
@@ -112,7 +112,7 @@ trait ExpressionExtractors { self: Interpolator =>
       template match {
         case Hole(index) =>
           return Some((store, Map(index -> expr)))
-        case TypeApplication(Operation("TypeAnnotation", Seq(templateInner)), Seq(templateType)) =>
+        case TypeAnnotationOperation(templateInner, templateType) =>
           return extract(expr.getType -> templateType, expr -> templateInner)
         case _ => ()
       }
@@ -192,9 +192,55 @@ trait ExpressionExtractors { self: Interpolator =>
           case _ => fail
         }
 
+        // Functions.
+
         case trees.Application(callee, args) => template match {
           case Application(templateCallee, templateArgs) if (args.length == templateArgs.length) =>
             extract(callee -> templateCallee, args.zip(templateArgs))
+          case _ => fail
+        }
+
+        case trees.FunctionInvocation(id, tpes, args) => template match {
+          case Application(TypedFunDef(fd, optTemplatesTypes), templateArgs) if (id == fd.id && args.length == templateArgs.length) => {
+            optTemplatesTypes match {
+              case None => extract(args.zip(templateArgs))
+              case Some(templateTypes) if (tpes.length == templateTypes.length) => extract(args.zip(templateArgs), tpes.zip(templateTypes))
+              case _ => fail
+            }
+          }
+          case _ => fail
+        }
+
+        // ADTs.
+
+        case trees.ADT(trees.ADTType(id, tpes), args) => template match {
+          case Application(TypedConsDef(cons, optTemplatesTypes), templateArgs) if (id == cons.id && args.length == templateArgs.length) => {
+            optTemplatesTypes match {
+              case None => extract(args.zip(templateArgs))
+              case Some(templateTypes) if (tpes.length == templateTypes.length) => extract(args.zip(templateArgs), tpes.zip(templateTypes))
+              case _ => fail
+            }
+          }
+          case _ => fail
+        }
+
+        case trees.ADTSelector(adt, selector) => template match {
+          case Selection(adtTemplate, Field((cons, vd))) if (vd.id == selector) =>  // TODO: Handle selectors with the same name.
+            extract(adt -> adtTemplate)
+          case _ => fail
+        }
+
+        // Instance checking and casting.
+
+        case trees.AsInstanceOf(inner, tpe) => template match {
+          case AsInstanceOfOperation(templateInner, templateType) =>
+            extract(inner -> templateInner, tpe -> templateType)
+          case _ => fail
+        }
+
+        case trees.IsInstanceOf(inner, tpe) => template match {
+          case IsInstanceOfOperation(templateInner, templateType) =>
+            extract(inner -> templateInner, tpe -> templateType)
           case _ => fail
         }
 
@@ -454,6 +500,12 @@ trait ExpressionExtractors { self: Interpolator =>
 
             extract(keys.zip(templatesKeys), values.zip(templatesValues), tpe -> optTemplateType)
           }
+          case _ => fail
+        }
+
+        case trees.BagAdd(bag, element) => (bag.getType(symbols), template) match {
+          case (trees.BagType(tpe), BagAddOperation(templateBag, templateElement, optTemplateType)) =>
+            extract(bag -> templateBag, element -> templateElement, tpe -> optTemplateType)
           case _ => fail
         }
 

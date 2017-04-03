@@ -352,5 +352,26 @@ trait ExpressionDeconstructors { self: Interpolator =>
         case _ => None
       }
     }
+
+    object AsInstanceOfOperation {
+      def unapply(expr: Expression): Option[(Expression, Type)] = expr match {
+        case TypeApplication(Selection(expr, FieldName("asInstanceOf")), Seq(tpe)) => Some((expr, tpe))
+        case _ => None
+      }
+    }
+
+    object IsInstanceOfOperation {
+      def unapply(expr: Expression): Option[(Expression, Type)] = expr match {
+        case TypeApplication(Selection(expr, FieldName("isInstanceOf")), Seq(tpe)) => Some((expr, tpe))
+        case _ => None
+      }
+    }
+
+    object TypeAnnotationOperation {
+      def unapply(expr: Expression): Option[(Expression, Type)] = expr match {
+        case TypeApplication(Operation("TypeAnnotation", Seq(expr)), Seq(tpe))  => Some((expr, tpe))
+        case _ => None
+      }
+    }
   }
 }

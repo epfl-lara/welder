@@ -1015,7 +1015,7 @@ trait ExpressionElaborators { self: Interpolator =>
         //---- Type Casting ----//
 
         // Annotation.
-        case TypeApplication(Operation("TypeAnnotation", Seq(expr)), Seq(tpe)) => {
+        case TypeAnnotationOperation(expr, tpe) => {
           val inoxTpe = getType(tpe)
           val sub = Unknown.fresh
 
@@ -1027,7 +1027,7 @@ trait ExpressionElaborators { self: Interpolator =>
         }
 
         // Casting.
-        case TypeApplication(Selection(expr, FieldName("asInstanceOf")), Seq(tpe)) => {
+        case AsInstanceOfOperation(expr, tpe) => {
           val inoxTpe = getType(tpe)
 
           val sup = Unknown.fresh
@@ -1047,7 +1047,7 @@ trait ExpressionElaborators { self: Interpolator =>
         }
 
         // Instance checking.
-        case TypeApplication(Selection(expr, FieldName("isInstanceOf")), Seq(tpe)) => {
+        case IsInstanceOfOperation(expr, tpe) => {
           val inoxTpe = getType(tpe)
 
           val sup = Unknown.fresh
