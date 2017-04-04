@@ -26,5 +26,8 @@ trait TypeIRs extends TypeElaborators with TypeExtractors { self: Interpolator =
     case object Group extends Operator
     case object Tuple extends Operator
     case object Arrow extends Operator
+
+    case class TypeHole(index: Int) extends Expression("TypeHole")
+    case class NameHole(index: Int) extends Expression("NameHole")
   }
 }

@@ -53,7 +53,7 @@ trait TypeParsers { self: Interpolator =>
       (p: Position) => withPos("Expected type or group of types.", p)
     }
 
-    lazy val uniqueType: Parser[List[Expression]] = (appliedType | parensType) ^^ {
+    lazy val uniqueType: Parser[List[Expression]] = (typeHole | appliedType | parensType) ^^ {
       case t => List(t)
     }
 
@@ -71,9 +71,15 @@ trait TypeParsers { self: Interpolator =>
       case Embedded(t : trees.Type) => Literal(EmbeddedType(t))
       case Embedded(i : inox.Identifier) => Literal(EmbeddedIdentifier(i))
       case lexical.Identifier(s) => Literal(Name(s))
-      case lexical.Hole(i) => Hole(i)
     }))
 
+    lazy val typeHole: Parser[Expression] = for {
+      i <- acceptMatch("Hole", { case lexical.Hole(i) => i })
+      r <- opt(argumentTypes('[', ']'))
+    } yield r match {
+      case None => TypeHole(i)
+      case Some(ts) => Application(NameHole(i), ts)
+    }
     lazy val appliedType: Parser[Expression] = for {
       n <- name
       oArgs <- opt(p('[') ~> rep1sep(typeExpression, p(',')) <~ endOfGroup(']'))
