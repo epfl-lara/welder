@@ -15,8 +15,6 @@ trait Lexers { self: Interpolator =>
 
     reserved ++= Seq("true", "false", "if", "else", "exists", "forall", "lambda", "choose", "let", "in", "assume")
 
-    import program.trees._
-
     val unaryOps: Seq[String] = Operators.unaries
     val opTable: Seq[Level] = Operators.binaries 
     val operators = (opTable.flatMap(_.ops) ++ unaryOps).distinct
@@ -26,9 +24,7 @@ trait Lexers { self: Interpolator =>
     case class Punctuation(punctuation: Char) extends Token { def chars = punctuation.toString }
     case class Quantifier(quantifier: String) extends Token { def chars = quantifier }
     case class Operator(operator: String) extends Token { def chars = operator }
-    case class RawIdentifier(identifier: inox.Identifier) extends Token { def chars = identifier.name }
-    case class RawExpr(expr: Expr) extends Token { def chars = expr.toString }
-    case class RawType(tpe: Type) extends Token { def chars = tpe.toString }
+    case class Embedded(value: Any) extends Token { def chars = value.toString }
     case class Hole(pos: Int) extends Token { def chars = "$" + pos }
 
     override def token: Parser[Token] =
@@ -80,16 +76,8 @@ trait Lexers { self: Interpolator =>
       })
 
     override def argToToken(x: Any): Token = x match {
-      case s: Symbol  => Identifier(s.toString)
-      case i: BigInt  => NumericLit(i.toString)
-      case i: Int     => NumericLit(i.toString)
-      case b: Boolean => RawExpr(BooleanLiteral(b))
-      case s: String  => StringLit(s)
-      case i: inox.Identifier => RawIdentifier(i)
-      case e: Expr => RawExpr(e)
-      case t: Type => RawType(t)
       case MatchPosition(i) => Hole(i)
-      case _ => ErrorToken("Invalid element: " + x)
+      case _ => Embedded(x)
     }
   }
 }

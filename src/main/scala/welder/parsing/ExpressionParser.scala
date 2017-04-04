@@ -94,7 +94,7 @@ trait ExpressionParsers { self: Interpolator =>
 
     lazy val selectorIdentifier: Parser[Field] = acceptMatch("Selector", {
       case lexical.Identifier(name) => FieldName(name)
-      case RawIdentifier(i) => FieldIdentifier(i)
+      case Embedded(i : inox.Identifier) => FieldIdentifier(i)
       case lexical.Hole(i) => FieldHole(i)
     })
 
@@ -147,14 +147,14 @@ trait ExpressionParsers { self: Interpolator =>
       case StringLit(s) => StringLiteral(s)
       case NumericLit(n) => NumericLiteral(n)
       case CharLit(c) => CharLiteral(c)
-      case RawExpr(e) => EmbeddedExpr(e)
+      case Embedded(e : trees.Expr) => EmbeddedExpr(e)
     }) ^^ (Literal(_)))
 
     lazy val variableExpr: Parser[Expression] = identifier ^^ (Variable(_))
 
     lazy val identifier: Parser[Identifier] = positioned(acceptMatch("Identifier", {
       case lexical.Identifier(name) => IdentifierName(name)
-      case RawIdentifier(i) => IdentifierIdentifier(i)
+      case Embedded(i : inox.Identifier) => IdentifierIdentifier(i)
       case lexical.Hole(i) => IdentifierHole(i)
     })) withFailureMessage {
       (p: Position) => withPos("Identifier expected.", p)
@@ -231,7 +231,7 @@ trait ExpressionParsers { self: Interpolator =>
     lazy val symbol: Parser[Expression] = acceptMatch("Symbol", {
       case lexical.Identifier(name) if bi.names.contains(name) => Literal(Name(name))
       case lexical.Identifier(name) if symbolTable.map(_.name).contains(name) => Literal(Name(name))
-      case RawIdentifier(i) if symbolTable.contains(i) => Literal(EmbeddedIdentifier(i))
+      case Embedded(i : inox.Identifier) if symbolTable.contains(i) => Literal(EmbeddedIdentifier(i))
     })
 
     lazy val arguments: Parser[List[Expression]] = 

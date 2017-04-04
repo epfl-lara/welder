@@ -19,6 +19,7 @@ trait TypeParsers { self: Interpolator =>
     import TypeIR._
     import lexical.{Hole => _, _}
     import program.symbols
+    import program.trees
 
     def withPos(error: String, pos: Position) = ErrorLocation(error, pos).toString
 
@@ -66,9 +67,9 @@ trait TypeParsers { self: Interpolator =>
       }
     lazy val parensType: Parser[Expression] = p('(') ~> typeExpression <~ p(')')
 
-    lazy val name: Parser[Expression] = positioned(acceptMatch("Non-function type", {
-      case RawType(t) => Literal(EmbeddedType(t))
-      case RawIdentifier(i) => Literal(EmbeddedIdentifier(i))
+    lazy val name: Parser[Expression] = positioned(acceptMatch("Name", {
+      case Embedded(t : trees.Type) => Literal(EmbeddedType(t))
+      case Embedded(i : inox.Identifier) => Literal(EmbeddedIdentifier(i))
       case lexical.Identifier(s) => Literal(Name(s))
       case lexical.Hole(i) => Hole(i)
     }))
@@ -81,7 +82,7 @@ trait TypeParsers { self: Interpolator =>
       case Some(args) => Application(n, args)
     }
 
-    lazy val inoxType: Parser[program.trees.Type] = (typeExpression ^^ toInoxType).flatMap { case e => e match {
+    lazy val inoxType: Parser[trees.Type] = (typeExpression ^^ toInoxType).flatMap { case e => e match {
       case Right(t) => success(t)
       case Left(es) => err(es.map(_.toString).mkString("\n\n"))
     }}
