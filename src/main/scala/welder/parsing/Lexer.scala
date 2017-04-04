@@ -32,6 +32,8 @@ trait Lexers { self: Interpolator =>
 
     val keywords = 
       acceptSeq("=>") ^^^ Keyword("=>") |
+      acceptSeq("...") ^^^ Keyword("...") |
+      acceptSeq("…") ^^^ Keyword("...") |
       ('.' <~ not(whitespaceChar)) ^^^ Keyword(".") |
       acceptSeq("true") <~ not(identChar | digit) ^^^ Keyword("true") |
       acceptSeq("false") <~ not(identChar | digit) ^^^ Keyword("false") |

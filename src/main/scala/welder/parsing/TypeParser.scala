@@ -38,6 +38,7 @@ trait TypeParsers { self: Interpolator =>
       case tss => tss.reverse match {
         case returnTypes :: rest => {
           val retType = returnTypes match {
+            case Seq(TypeSeqHole(i)) => Operation(Tuple, Seq(TypeSeqHole(i)))
             case Seq(t) => t
             case ts     => Operation(Tuple, ts)
           }
@@ -49,7 +50,7 @@ trait TypeParsers { self: Interpolator =>
       (p: Position) => withPos("Type expected.", p)
     }
 
-    lazy val betweenArrows: Parser[List[Expression]] = (argumentTypes | uniqueType) withFailureMessage {
+    lazy val betweenArrows: Parser[List[Expression]] = (argumentTypes('(', ')') | uniqueType) withFailureMessage {
       (p: Position) => withPos("Expected type or group of types.", p)
     }
 
@@ -61,10 +62,15 @@ trait TypeParsers { self: Interpolator =>
       (p: Position) => withPos("Expected character `" + c + "`, or more types (separated by `,`).", p)
     }
 
-    lazy val argumentTypes: Parser[List[Expression]] =
-      (p('(') ~> commit(rep1sep(typeExpression, p(',')) <~ endOfGroup(')'))) withFailureMessage {
+    def argumentTypes(open: Char, close: Char): Parser[List[Expression]] = {
+      val typeOrEllipsis = (((typeSeqHole | typeExpression) ^^ (List(_))) | typeEllipsis) withFailureMessage {
+        (p: Position) => withPos("Single type, or embedded sequence of types followed by `...`, expected.", p)
+      }
+
+      (p(open) ~> commit(rep1sep(typeOrEllipsis, p(',')) <~ endOfGroup(close))) ^^ (_.flatten) withFailureMessage {
         (p: Position) => withPos("Group of arguments expected.", p)
       }
+    }
     lazy val parensType: Parser[Expression] = p('(') ~> typeExpression <~ p(')')
 
     lazy val name: Parser[Expression] = positioned(acceptMatch("Name", {
@@ -73,6 +79,11 @@ trait TypeParsers { self: Interpolator =>
       case lexical.Identifier(s) => Literal(Name(s))
     }))
 
+    lazy val typeSeqHole: Parser[Expression] = for {
+      i <- acceptMatch("Hole", { case lexical.Hole(i) => i })
+      _ <- kw("...")
+    } yield (TypeSeqHole(i))
+
     lazy val typeHole: Parser[Expression] = for {
       i <- acceptMatch("Hole", { case lexical.Hole(i) => i })
       r <- opt(argumentTypes('[', ']'))
@@ -80,9 +91,17 @@ trait TypeParsers { self: Interpolator =>
       case None => TypeHole(i)
       case Some(ts) => Application(NameHole(i), ts)
     }
+
+    lazy val typeEllipsis: Parser[List[Expression]] = acceptMatch("Multiple embedded types", {
+      case Embedded(ts: Traversable[_]) if ts.forall(_.isInstanceOf[trees.Type]) =>
+        ts.map((t: Any) => Literal(EmbeddedType(t.asInstanceOf[trees.Type]))).toList
+    }) <~ (kw("...") withFailureMessage {
+      (p: Position) => withPos("Missing `...` after embedded sequence of types.", p)
+    })
+
     lazy val appliedType: Parser[Expression] = for {
       n <- name
-      oArgs <- opt(p('[') ~> rep1sep(typeExpression, p(',')) <~ endOfGroup(']'))
+      oArgs <- opt(argumentTypes('[', ']'))
     } yield oArgs match {
       case None => n
       case Some(args) => Application(n, args)
