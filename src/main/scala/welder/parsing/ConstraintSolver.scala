@@ -446,13 +446,6 @@ trait ConstraintSolvers { self: Interpolator =>
           handle(constraint)
         }
 
-        // Set the default instance for classes.
-        typeClasses.foreach({
-          case (t, Integral | Numeric) => remaining +:= Equal(t, IntegerType).setPos(t.pos)
-          case (t, Bits) => remaining +:= Equal(t, Int32Type).setPos(t.pos)
-          case _ => ()
-        })
-
         // val (inUppersAll, inLowersAll) = bounds.toSeq.map({
         //   case (u, Bounds(ls, us)) => {
         //     val (plss, nlss) = ls.map(UnknownCollectorVariance(_)).unzip
@@ -491,6 +484,15 @@ trait ConstraintSolvers { self: Interpolator =>
             }
           }
         })
+
+        if (remaining.isEmpty) {
+          // Set the default instance for classes.
+          typeClasses.foreach({
+            case (t, Integral | Numeric) => remaining +:= Equal(t, IntegerType).setPos(t.pos)
+            case (t, Bits) => remaining +:= Equal(t, Int32Type).setPos(t.pos)
+            case _ => ()
+          })
+        }
       }
 
       if (!unknowns.isEmpty) {
