@@ -140,6 +140,10 @@ trait ExpressionParsers { self: Interpolator =>
       case lexical.Hole(i) => ExpressionHole(i)
     })
 
+    lazy val holeExprSeq: Parser[Expression] = acceptMatch("Hole with ellipsis", {
+      case lexical.Hole(i) => ExpressionSeqHole(i)
+    }) <~ kw("...")
+
 
     lazy val literalExpr: Parser[Expression] = positioned(acceptMatch("Literal", {
       case Keyword("true")  => BooleanLiteral(true)
@@ -236,7 +240,7 @@ trait ExpressionParsers { self: Interpolator =>
     })
 
     lazy val arguments: Parser[List[Expression]] = 
-      p('(') ~> repsep(expression, p(',')) <~ commit(p(')') withFailureMessage {
+      p('(') ~> repsep(holeExprSeq | expression, p(',')) <~ commit(p(')') withFailureMessage {
         (p: Position) => withPos("Missing ')' at the end of the arguments.", p)
       })
 
