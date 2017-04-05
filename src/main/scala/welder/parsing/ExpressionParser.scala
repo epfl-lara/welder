@@ -28,7 +28,7 @@ trait ExpressionParsers { self: Interpolator =>
     }
 
     lazy val selectableExpr: Parser[Expression] = withApplication {
-      holeExpr | invocationExpr | literalExpr | variableExpr | literalSetLikeExpr | tupleOrParensExpr
+      invocationExpr | holeExpr | literalExpr | variableExpr | literalSetLikeExpr | tupleOrParensExpr
     }
 
     def withTypeAnnotation(exprParser: Parser[Expression]): Parser[Expression] = {
@@ -137,7 +137,7 @@ trait ExpressionParsers { self: Interpolator =>
     } yield Let(bs, bd)
 
     lazy val holeExpr: Parser[Expression] = acceptMatch("Hole", {
-      case lexical.Hole(i) => Hole(i)
+      case lexical.Hole(i) => ExpressionHole(i)
     })
 
 
@@ -232,6 +232,7 @@ trait ExpressionParsers { self: Interpolator =>
       case lexical.Identifier(name) if bi.names.contains(name) => Literal(Name(name))
       case lexical.Identifier(name) if symbolTable.map(_.name).contains(name) => Literal(Name(name))
       case Embedded(i : inox.Identifier) if symbolTable.contains(i) => Literal(EmbeddedIdentifier(i))
+      case lexical.Hole(i) => ExpressionHole(i)
     })
 
     lazy val arguments: Parser[List[Expression]] = 

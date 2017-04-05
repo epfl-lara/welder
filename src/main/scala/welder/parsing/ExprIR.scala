@@ -57,6 +57,6 @@ trait ExprIRs extends ExpressionElaborators with ExpressionExtractors with Expre
     case object Exists extends Quantifier
     case object Choose extends Quantifier
 
-    case class Hole(index: Int) extends Expression("Hole")
+    case class ExpressionHole(index: Int) extends Expression("ExpressionHole")
   }
 }

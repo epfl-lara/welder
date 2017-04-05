@@ -148,7 +148,7 @@ trait ExpressionExtractors { self: Interpolator =>
       val success = Some((store, empty))
 
       template match {
-        case Hole(index) =>
+        case ExpressionHole(index) =>
           return Some((store, Map(index -> expr)))
         case TypeAnnotationOperation(templateInner, templateType) =>
           return extract(expr.getType -> templateType, expr -> templateInner)
@@ -246,6 +246,12 @@ trait ExpressionExtractors { self: Interpolator =>
               case _ => fail
             }
           }
+          case Application(TypeApplication(ExpressionHole(index), templateTypes), templateArgs) => for {
+            (store, matchings) <- extract(tpes -> templateTypes, args -> templateArgs)
+          } yield (store, matching(index, id) ++ matchings)
+          case Application(ExpressionHole(index), templateArgs) => for {
+            (store, matchings) <- extract(args -> templateArgs)
+          } yield (store, matching(index, id) ++ matchings)
           case _ => fail
         }
 
