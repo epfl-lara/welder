@@ -832,6 +832,7 @@ trait ExpressionElaborators { self: Interpolator =>
         // Function application.
         case Application(callee, args) => {
           val expectedCallee = Unknown.fresh
+          val argsUpperBounds = Seq.fill(args.length)(Unknown.fresh)
           val expectedArgs = Seq.fill(args.length)(Unknown.fresh)
           val retType = Unknown.fresh
 
@@ -842,9 +843,13 @@ trait ExpressionElaborators { self: Interpolator =>
           }).map({
             case exprs => trees.Application(exprs.head, exprs.tail)
           }).addConstraint({
-            Constraint.subtype(expectedCallee, trees.FunctionType(expectedArgs, retType))
+            Constraint.equal(expectedCallee, trees.FunctionType(argsUpperBounds, retType))
+          }).addConstraints({
+            expectedArgs.zip(argsUpperBounds).map({
+              case (e, u) => Constraint.subtype(e, u)
+            })
           }).addConstraint({
-            Constraint.equal(retType, expected)
+            Constraint.subtype(retType, expected)
           })
         }
 
