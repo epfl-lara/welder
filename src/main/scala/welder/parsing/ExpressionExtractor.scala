@@ -10,64 +10,82 @@ trait ExpressionExtractors { self: Interpolator =>
     import program.trees
     import program.symbols
 
-
     private case class State(local: Store, global: Store)
 
     private object State {
       def empty: State = State(Store.empty, Store.empty)
     }
 
-    private sealed abstract class MatchObligation
-    private case class ExprMatch(expr: trees.Expr, template: Expression) extends MatchObligation
-    private case class TypeMatch(tpe: trees.Type, template: Type) extends MatchObligation
-    private case class OptTypeMatch(tpe: trees.Type, optTemplate: Option[Type]) extends MatchObligation
-    private case class MultipleObligations(pairs: Seq[MatchObligation]) extends MatchObligation
-    private case class WithBindings(bindings: Seq[(inox.Identifier, String)], obligation: MatchObligation) extends MatchObligation
-    private case object Failure extends MatchObligation
+    private type MatchObligation = State => Option[(Store, Match)]
 
-    private def withBindings(bindings: (Seq[inox.Identifier], Seq[String]))(obligation: MatchObligation): MatchObligation = {
+    private def withBindings(bindings: (Seq[inox.Identifier], Seq[String]))(obligation: MatchObligation): MatchObligation = { (state: State) =>
       if (bindings._1.length == bindings._2.length) {
-        WithBindings(bindings._1.zip(bindings._2), obligation)
+        val newLocal = bindings._1.zip(bindings._2).foldLeft(state.local) {
+          case (currentStore, (id, name)) => currentStore.add(id, name)
+        }
+
+        obligation(State(newLocal, state.global))
       }
       else {
-        Failure
+        None
       }
     }
-    private def withBinding(pair: (inox.Identifier, String))(obligation: MatchObligation): MatchObligation = {
-      WithBindings(Seq((pair._1, pair._2)), obligation)
+    private def withBinding(pair: (inox.Identifier, String))(obligation: MatchObligation): MatchObligation = { (state: State) =>
+      val (id, name) = pair
+      val newLocal = state.local.add(id, name)
+      
+      obligation(State(newLocal, state.global))
     }
-    private implicit def toExprObligation(pair: (trees.Expr, Expression)): MatchObligation = ExprMatch(pair._1, pair._2)
-    private implicit def toTypeObligation(pair: (trees.Type, Type)): MatchObligation = TypeMatch(pair._1, pair._2)
-    private implicit def toOptTypeObligation(pair: (trees.Type, Option[Type])): MatchObligation = OptTypeMatch(pair._1, pair._2)
-    private implicit def toExprObligations(pair: (Seq[trees.Expr], Seq[Expression])): MatchObligation = {
-      val exprs = pair._1
-      val templates = pair._2
-      if (exprs.length == templates.length) {
-        MultipleObligations(exprs.zip(templates).map(toExprObligation(_)))
+    private implicit def toExprObligation(pair: (trees.Expr, Expression)): MatchObligation = { (state: State) => 
+      extractOne(pair._1, pair._2)(state)
+    }
+    private implicit def toTypeObligation(pair: (trees.Type, Type)): MatchObligation = { (state: State) => 
+      val (tpe, template) = pair
+      TypeIR.extract(tpe, template).map((state.global, _))
+    }
+    private implicit def toOptTypeObligation(pair: (trees.Type, Option[Type])): MatchObligation = { (state: State) =>
+      val (tpe, optTemplateType) = pair
+
+      if (optTemplateType.isEmpty) {
+        Some((state.global, empty))
       }
       else {
-        Failure
+        toTypeObligation(tpe -> optTemplateType.get)(state)
       }
     }
-    private implicit def toTypeObligations(pair: (Seq[trees.Type], Seq[Type])): MatchObligation = {
-      val types = pair._1
-      val templates = pair._2
-      if (types.length == templates.length) {
-        MultipleObligations(types.zip(templates).map(toTypeObligation(_)))
-      }
-      else {
-        Failure
+    private implicit def toExprObligations(pair: (Seq[trees.Expr], Seq[Expression])): MatchObligation = { (state: State) =>
+      pair match {
+        case (Seq(), Seq()) => Some((state.global, empty))
+        case (Seq(), _) => None
+        case (_, Seq()) => None
+        case (_, Seq(ExpressionSeqHole(i), templateRest @ _*)) => {
+          val n = pair._1.length - templateRest.length
+
+          if (n < 0) {
+            None
+          }
+          else {
+            val (matches, rest) = pair._1.splitAt(n)
+
+            toExprObligations(rest -> templateRest)(state) map {
+              case (store, matchings) => (store, matching(i, matches) ++ matchings)
+            }
+          }
+        }
+        case (Seq(expr, exprRest @ _*), Seq(template, templateRest @ _*)) => for {
+          (interGlobal, matchingsHead) <- extract(expr -> template)(state)
+          (finalGlobal, matchingsRest) <- extract(exprRest -> templateRest)(State(state.local, interGlobal))
+        } yield (finalGlobal, matchingsHead ++ matchingsRest)
       }
     }
-    private implicit def toOptTypeObligations(pair: (Seq[trees.Type], Seq[Option[Type]])): MatchObligation = {
-      val types = pair._1
-      val templates = pair._2
-      if (types.length == templates.length) {
-        MultipleObligations(types.zip(templates).map(toOptTypeObligation(_)))
+    private implicit def toTypeObligations(pair: (Seq[trees.Type], Seq[Type])): MatchObligation = { (state: State) =>
+      TypeIR.extractSeq(pair._1, pair._2).map((state.global, _))
+    }
+    private implicit def toOptTypeObligations(pair: (Seq[trees.Type], Seq[Option[Type]])): MatchObligation = { (state: State) =>
+      val pairs = pair._1.zip(pair._2).collect {
+        case (tpe, Some(template)) => toTypeObligation(tpe -> template)
       }
-      else {
-        Failure
-      }
+      extract(pairs : _*)(state)
     }
 
     private def extract(pairs: MatchObligation*)(implicit state: State): Option[(Store, Match)] = {
@@ -76,34 +94,8 @@ trait ExpressionExtractors { self: Interpolator =>
 
       pairs.foldLeft(zero) {
         case (None, _) => None
-        case (Some((globalAcc, matchingsAcc)), pair) => {
-
-          val optNewGlobalAndMatchings = pair match {
-
-            case Failure => None
-
-            case ExprMatch(expr, template) => 
-              extractOne(expr, template)(State(state.local, globalAcc))
-
-            case TypeMatch(tpe, template) => 
-              TypeIR.extract(tpe, template).map((globalAcc, _))
-
-            case OptTypeMatch(tpe, None) => Some((globalAcc, empty))
-
-            case OptTypeMatch(tpe, Some(template)) => TypeIR.extract(tpe, template).map((globalAcc, _))
-
-            case MultipleObligations(pairs) => extract(pairs : _*)
-
-            case WithBindings(bindings, matchPair) => {
-              val newLocal = bindings.foldLeft(state.local) {
-                case (currentStore, (id, name)) => currentStore.add(id, name)
-              }
-
-              extract(matchPair)(State(newLocal, globalAcc))
-            }
-          }
-
-          optNewGlobalAndMatchings map {
+        case (Some((globalAcc, matchingsAcc)), obligation) => {
+          obligation(State(state.local, globalAcc)) map {
             case (newGlobal, extraMatchings) => (newGlobal, matchingsAcc ++ extraMatchings)
           }
         }
