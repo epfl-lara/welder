@@ -240,9 +240,18 @@ trait ExpressionParsers { self: Interpolator =>
     })
 
     lazy val arguments: Parser[List[Expression]] = 
-      p('(') ~> repsep(holeExprSeq | expression, p(',')) <~ commit(p(')') withFailureMessage {
+      p('(') ~> repsep(exprEllipsis | (holeExprSeq | expression) ^^ {List(_)}, p(',')) <~ commit(p(')') withFailureMessage {
         (p: Position) => withPos("Missing ')' at the end of the arguments.", p)
-      })
+      }) ^^ {
+        _.flatten
+      }
+
+    lazy val exprEllipsis: Parser[List[Expression]] = acceptMatch("Multiple embedded expressions", {
+      case Embedded(es: Traversable[_]) if es.forall(_.isInstanceOf[trees.Expr]) =>
+        es.map((e: Any) => Literal(EmbeddedExpr(e.asInstanceOf[trees.Expr]))).toList
+    }) <~ commit(kw("...") withFailureMessage {
+      (p: Position) => withPos("Missing `...` after embedded sequence of expressions.", p)
+    })
 
     lazy val invocationExpr: Parser[Expression] = for {
       sb <- symbol
