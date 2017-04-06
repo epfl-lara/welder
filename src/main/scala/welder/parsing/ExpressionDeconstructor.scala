@@ -111,10 +111,26 @@ trait ExpressionDeconstructors { self: Interpolator =>
       }
     }
 
-    object BooleanNAryOp {
-      def unapply(string: String): Option[Seq[trees.Expr] => trees.Expr] = string match {
-        case "&&" => Some({ (exprs: Seq[trees.Expr]) => trees.And(exprs) })
-        case "||" => Some({ (exprs: Seq[trees.Expr]) => trees.Or(exprs) })
+    object BooleanAndOperation {
+      def unapply(expr: Expression): Option[Seq[Expression]] = expr match {
+        case Operation("&&", expressions) => Some(expressions)
+        case PrimitiveFunction(bi.BooleanAnd, _, expressions, None) => Some(expressions)
+        case _ => None
+      }
+    }
+
+    object BooleanOrOperation {
+      def unapply(expr: Expression): Option[Seq[Expression]] = expr match {
+        case Operation("||", expressions) => Some(expressions)
+        case PrimitiveFunction(bi.BooleanOr, _, expressions, None) => Some(expressions)
+        case _ => None
+      }
+    }
+
+    object BooleanNAryOperation {
+      def unapply(expr: Expression): Option[(Seq[trees.Expr] => trees.Expr, Seq[Expression])] = expr match {
+        case BooleanAndOperation(expressions) => Some(({ (exprs: Seq[trees.Expr]) => trees.And(exprs) }, expressions))
+        case BooleanOrOperation(expressions) => Some(({ (exprs: Seq[trees.Expr]) => trees.Or(exprs) }, expressions))
         case _ => None
       }
     }

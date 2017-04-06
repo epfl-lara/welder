@@ -312,13 +312,13 @@ trait ExpressionExtractors { self: Interpolator =>
         }
         
         case trees.And(exprs) => template match {
-          case Operation("&&", templates) =>
+          case BooleanAndOperation(templates) =>
             extract(exprs -> templates)
           case _ => fail
         }
 
         case trees.Or(exprs) => template match {
-          case Operation("||", templates) =>
+          case BooleanOrOperation(templates) =>
             extract(exprs -> templates)
           case _ => fail
         }

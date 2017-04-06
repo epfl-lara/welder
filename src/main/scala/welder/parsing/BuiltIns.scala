@@ -23,6 +23,9 @@ trait BuiltIns { self: Interpolator =>
     case object StringLength extends BuiltIn(Some(1), 0)
     case object StringSubstring extends BuiltIn(Some(3), 0)
 
+    case object BooleanAnd extends BuiltIn(None, 0)
+    case object BooleanOr extends BuiltIn(None, 0)
+
     case object SetConstructor extends BuiltIn(None, 1) with Constructor
     case object SetContains extends BuiltIn(Some(2), 1)
     case object SetAdd extends BuiltIn(Some(2), 1)
@@ -55,6 +58,9 @@ trait BuiltIns { self: Interpolator =>
     override val names: Map[String, BuiltIn] = Map(
       AsInstanceOf -> "asInstanceOf",
       IsInstanceOf -> "isInstanceOf",
+
+      BooleanAnd -> "and",
+      BooleanOr -> "or",
 
       StringConcatenate -> "concatenate",
       StringLength -> "length",

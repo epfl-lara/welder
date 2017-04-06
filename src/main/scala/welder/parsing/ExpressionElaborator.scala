@@ -336,7 +336,7 @@ trait ExpressionElaborators { self: Interpolator =>
         }
 
         // NAry operations defined on booleans.
-        case Operation(BooleanNAryOp(op), args) => {
+        case BooleanNAryOperation(op, args) => {
           
           Constrained.sequence({
             args.map(typeCheck(_, expected))
