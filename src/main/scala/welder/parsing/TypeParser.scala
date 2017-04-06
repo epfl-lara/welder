@@ -95,7 +95,7 @@ trait TypeParsers { self: Interpolator =>
     lazy val typeEllipsis: Parser[List[Expression]] = acceptMatch("Multiple embedded types", {
       case Embedded(ts: Traversable[_]) if ts.forall(_.isInstanceOf[trees.Type]) =>
         ts.map((t: Any) => Literal(EmbeddedType(t.asInstanceOf[trees.Type]))).toList
-    }) <~ (kw("...") withFailureMessage {
+    }) <~ commit(kw("...") withFailureMessage {
       (p: Position) => withPos("Missing `...` after embedded sequence of types.", p)
     })
 
