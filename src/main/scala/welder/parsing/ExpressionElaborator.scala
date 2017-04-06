@@ -829,30 +829,6 @@ trait ExpressionElaborators { self: Interpolator =>
           })
         }
 
-        // Function application.
-        case Application(callee, args) => {
-          val expectedCallee = Unknown.fresh
-          val argsUpperBounds = Seq.fill(args.length)(Unknown.fresh)
-          val expectedArgs = Seq.fill(args.length)(Unknown.fresh)
-          val retType = Unknown.fresh
-
-          Constrained.sequence({
-            typeCheck(callee, expectedCallee) +: args.zip(expectedArgs).map({
-              case (arg, expectedArg) => typeCheck(arg, expectedArg)
-            })
-          }).map({
-            case exprs => trees.Application(exprs.head, exprs.tail)
-          }).addConstraint({
-            Constraint.equal(expectedCallee, trees.FunctionType(argsUpperBounds, retType))
-          }).addConstraints({
-            expectedArgs.zip(argsUpperBounds).map({
-              case (e, u) => Constraint.subtype(e, u)
-            })
-          }).addConstraint({
-            Constraint.subtype(retType, expected)
-          })
-        }
-
         //---- Bindings ----//
 
         // Let binding.
@@ -1109,6 +1085,33 @@ trait ExpressionElaborators { self: Interpolator =>
             // The type of the expression being selected should be exactly
             // that of the ADT constructor.
             Constraint.equal(adtType, expectedExpr)
+          })
+        }
+
+        //---- Function application ----//
+        // This is matched last since other constructs have the same shape.
+
+        // Function application.
+        case Application(callee, args) => {
+          val expectedCallee = Unknown.fresh
+          val argsUpperBounds = Seq.fill(args.length)(Unknown.fresh)
+          val expectedArgs = Seq.fill(args.length)(Unknown.fresh)
+          val retType = Unknown.fresh
+
+          Constrained.sequence({
+            typeCheck(callee, expectedCallee) +: args.zip(expectedArgs).map({
+              case (arg, expectedArg) => typeCheck(arg, expectedArg)
+            })
+          }).map({
+            case exprs => trees.Application(exprs.head, exprs.tail)
+          }).addConstraint({
+            Constraint.equal(expectedCallee, trees.FunctionType(argsUpperBounds, retType))
+          }).addConstraints({
+            expectedArgs.zip(argsUpperBounds).map({
+              case (e, u) => Constraint.subtype(e, u)
+            })
+          }).addConstraint({
+            Constraint.subtype(retType, expected)
           })
         }
 
