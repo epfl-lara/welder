@@ -265,6 +265,12 @@ trait ExpressionExtractors { self: Interpolator =>
               case _ => fail
             }
           }
+          case Application(TypeApplication(ExpressionHole(index), templateTypes), templateArgs) => for {
+            (store, matchings) <- extract(tpes -> templateTypes, args -> templateArgs)
+          } yield (store, matching(index, id) ++ matchings)
+          case Application(ExpressionHole(index), templateArgs) => for {
+            (store, matchings) <- extract(args -> templateArgs)
+          } yield (store, matching(index, id) ++ matchings)
           case _ => fail
         }
 
