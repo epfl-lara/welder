@@ -371,14 +371,14 @@ trait ExpressionDeconstructors { self: Interpolator =>
 
     object AsInstanceOfOperation {
       def unapply(expr: Expression): Option[(Expression, Type)] = expr match {
-        case TypeApplication(Selection(expr, FieldName("asInstanceOf")), Seq(tpe)) => Some((expr, tpe))
+        case PrimitiveFunction(bi.AsInstanceOf, _, Seq(expr), Some(Seq(tpe))) => Some((expr, tpe))
         case _ => None
       }
     }
 
     object IsInstanceOfOperation {
       def unapply(expr: Expression): Option[(Expression, Type)] = expr match {
-        case TypeApplication(Selection(expr, FieldName("isInstanceOf")), Seq(tpe)) => Some((expr, tpe))
+        case PrimitiveFunction(bi.IsInstanceOf, _, Seq(expr), Some(Seq(tpe))) => Some((expr, tpe))
         case _ => None
       }
     }
