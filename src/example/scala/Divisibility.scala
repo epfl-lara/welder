@@ -9,6 +9,7 @@ object DivisibilityExample {
   val emptyProgram = InoxProgram(Context.empty, NoSymbols)
   val theory = theoryOf(emptyProgram)
   import theory._
+  import emptyProgram.symbols.interpolator._
 
   // Property stating that x divides y.
   def divides(x: Expr, y: Expr): Expr = e"∃k. $x * k == $y"

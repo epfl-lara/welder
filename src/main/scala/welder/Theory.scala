@@ -12,7 +12,6 @@ trait Theory
   extends ADTs
      with Arithmetic
      with Evaluators
-     with Interpolations
      with Paths
      with Relational
      with Rules
