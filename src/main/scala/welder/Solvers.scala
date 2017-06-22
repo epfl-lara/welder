@@ -4,6 +4,7 @@ package welder
 
 import inox.solvers
 import inox.solvers._
+import inox.transformers._
 
 /** Contains methods related to SMT solvers. */
 trait Solvers { self: Theory =>
@@ -15,6 +16,11 @@ trait Solvers { self: Theory =>
   // Factory of solvers.
   private lazy val factory = solvers.SolverFactory.default(program)
   
+  private lazy val assumeCollector = CollectorWithPC(program) {
+    case (Assume(cond, _), path) => (cond, path.conditions)
+    // TODO: Constructors with ADT invariants.
+  }
+
   /** Tries to prove an expression using an SMT solver.
    *
    * @param expr The expression to be proved. Should be of type `BooleanType`.
@@ -44,27 +50,36 @@ trait Solvers { self: Theory =>
     }
     else {
       val hypotheses = assumptions.map(_.expression)
-      val negation = Not(Implies(and(hypotheses : _*), expr))
-      program.ctx.reporter.debug(negation)
-      val solver = factory.getNewSolver.setTimeout(5000L)
-      try {
+
+      if (checkNegationUnsat(expr, hypotheses)) {
+        for ((cond, assumptions) <- assumeCollector.collect(expr)) {
+          if (!checkNegationUnsat(cond, assumptions)) {
+            return Attempt.fail("SMT solver could not prove the assumption " + cond + 
+              " made by the expression " + expr +
+              " given the following path conditions: " + assumptions.mkString(", ") + ".")
+          }
+        }
+
+        Attempt.success(new Theorem(expr).from(assumptions))
+      }
+      else {
+        Attempt.fail("SMT solver could not prove the property: " + expr +
+          ", from hypotheses: " + hypotheses.mkString(", ") + ".")
+      }
+    }
+  }
+
+  private def checkNegationUnsat(expr: Expr, assumptions: Seq[Expr]): Boolean = {
+    val negation = Not(Implies(and(assumptions : _*), expr))
+    val solver = factory.getNewSolver.setTimeout(5000L)
+
+    try {
         solver.assertCnstr(negation)
-        val result = solver.check(SolverResponses.Model) // TODO: What to do with models?
-
-        program.ctx.reporter.debug(result)
-
-        if (result.isUNSAT) {
-          // Impossible to satisfy the negation of the expression,
-          // thus the expression follows from the assumptions.
-          Attempt.success(new Theorem(expr).from(assumptions))
-        }
-        else {
-          Attempt.fail("SMT solver could not prove the property: " + expr + ", from hypotheses: " + hypotheses.mkString(", ") + ".")
-        }
+        val result = solver.check(SolverResponses.Simple)
+        result.isUNSAT
       }
       finally {
         factory.reclaim(solver)
       }
-    }
   }
 }
