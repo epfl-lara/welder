@@ -3,6 +3,7 @@
 import inox._
 import inox.trees._
 import inox.trees.dsl._
+import inox.trees.interpolator._
 import welder._
 
 object GaussExample {
@@ -39,7 +40,6 @@ object GaussExample {
                      NoSymbols.withFunctions(Seq(sumFunction)))
   val theory = theoryOf(sumProgram)
   import theory._
-  import sumProgram.symbols.interpolator._
 
   // The property we want to prove, as a function of `n`.
   def property(n: Expr): Expr = {
