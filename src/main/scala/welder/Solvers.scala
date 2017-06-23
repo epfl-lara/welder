@@ -16,9 +16,23 @@ trait Solvers { self: Theory =>
   // Factory of solvers.
   private lazy val factory = solvers.SolverFactory.default(program)
   
-  private lazy val assumeCollector = CollectorWithPC(program) {
-    case (Assume(cond, _), path) => (cond, path.conditions)
-    // TODO: Constructors with ADT invariants.
+  private lazy val assumptionsCollector = CollectorWithPC(program) {
+    case (Assume(cond, _), path) => () => checkNegationUnsat(cond, path.conditions)
+    case (cons@ADT(adtType, exprs), path) if adtType.getADT.hasInvariant => {
+      val adt = adtType.getADT
+      val invariantApply = FunctionInvocation(adt.invariant.get.id, adt.tps, Seq(cons))
+      () => checkNegationUnsat(invariantApply, path.conditions)
+    }
+    case (Choose(vd, pred), path) => {
+      val vdFresh = vd.freshen
+      val conditions = path.conditions.map(exprOps.replaceFromSymbols(Map(vd -> vdFresh.toVariable), _))
+      val freeVars = (pred +: conditions).map(exprOps.variablesOf(_)).reduce(_ ++ _).map(_.toVal) - vd
+      val forall = Forall(freeVars.toSeq, implies(and(conditions : _*), pred))
+      () => checkSat(forall)
+    }
+    case (AsInstanceOf(expr, tpe), path) => {
+      () => checkNegationUnsat(IsInstanceOf(expr, tpe), path.conditions)
+    }
   }
 
   /** Tries to prove an expression using an SMT solver.
@@ -52,11 +66,9 @@ trait Solvers { self: Theory =>
       val hypotheses = assumptions.map(_.expression)
 
       if (checkNegationUnsat(expr, hypotheses)) {
-        for ((cond, assumptions) <- assumeCollector.collect(expr)) {
-          if (!checkNegationUnsat(cond, assumptions)) {
-            return Attempt.fail("SMT solver could not prove the assumption " + cond + 
-              " made by the expression " + expr +
-              " given the following path conditions: " + assumptions.mkString(", ") + ".")
+        for (check <- assumptionsCollector.collect(expr)) {
+          if (!check()) {
+            return Attempt.fail("SMT solver could not prove an assumption made by the expression " + expr + ".")
           }
         }
 
@@ -69,17 +81,30 @@ trait Solvers { self: Theory =>
     }
   }
 
+  private def checkSat(expr: Expr): Boolean = {
+    val solver = factory.getNewSolver.setTimeout(5000L)
+    try {
+      solver.assertCnstr(expr)
+      val result = solver.check(SolverResponses.Simple)
+      println(result)
+      result.isSAT
+    }
+    finally {
+      factory.reclaim(solver)
+    }
+  }
+
   private def checkNegationUnsat(expr: Expr, assumptions: Seq[Expr]): Boolean = {
     val negation = Not(Implies(and(assumptions : _*), expr))
     val solver = factory.getNewSolver.setTimeout(5000L)
 
     try {
-        solver.assertCnstr(negation)
-        val result = solver.check(SolverResponses.Simple)
-        result.isUNSAT
-      }
-      finally {
-        factory.reclaim(solver)
-      }
+      solver.assertCnstr(negation)
+      val result = solver.check(SolverResponses.Simple)
+      result.isUNSAT
+    }
+    finally {
+      factory.reclaim(solver)
+    }
   }
 }
