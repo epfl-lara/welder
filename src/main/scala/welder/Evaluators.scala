@@ -23,12 +23,26 @@ trait Evaluators { self: Theory =>
    * @return The proven equality between `expr` and its evaluated form.
    */
   def evaluated(expr: Expr): Attempt[Theorem] = {
+    if (expr.getType == Untyped) {
+      Attempt.fail("Could not evaluate expression " + expr + " as it is not well-typed.")
+    }
+    else {
 
-    val result = evaluator.eval(expr)
+      val isNonDeterministic = exprOps.exists {
+        case Choose(_, _) => true
+        case _ => false
+      } _
 
-    result.result match {
-      case Some(value) => Attempt.success(new Theorem(Equals(expr, value)))
-      case None        => Attempt.fail("Could not evaluate expression " + expr + " correctly.")
+      if (isNonDeterministic(expr)) {
+        Attempt.fail("Could not evaluate expression " + expr + " as it is non-deterministic.")
+      } else {
+        val result = evaluator.eval(expr)
+
+        result.result match {
+          case Some(value) => Attempt.success(new Theorem(Equals(expr, value)))
+          case None        => Attempt.fail("Could not evaluate expression " + expr + " correctly.")
+        }
+      }
     }
   }
 
