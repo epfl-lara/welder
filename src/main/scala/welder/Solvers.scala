@@ -27,8 +27,17 @@ trait Solvers { self: Theory =>
       val vdFresh = vd.freshen
       val conditions = path.conditions.map(exprOps.replaceFromSymbols(Map(vd -> vdFresh.toVariable), _))
       val freeVars = (pred +: conditions).map(exprOps.variablesOf(_)).reduce(_ ++ _).map(_.toVal) - vd
-      val forall = Forall(freeVars.toSeq, implies(and(conditions : _*), pred))
-      () => checkSat(forall)
+      // Not supported by Inox:
+      // val forall = Forall(freeVars.toSeq, implies(and(conditions : _*), not(Forall(Seq(vd), not(pred)))))
+      // () => checkNegationUnsat(forall, Seq())
+      if (freeVars.isEmpty) {
+        println(implies(and(conditions : _*), pred))
+        () => checkSat(implies(and(conditions : _*), pred))
+      }
+      else {
+        // TODO: Can we do better here ?
+        () => false
+      }
     }
     case (AsInstanceOf(expr, tpe), path) => {
       () => checkNegationUnsat(IsInstanceOf(expr, tpe), path.conditions)
@@ -45,6 +54,7 @@ trait Solvers { self: Theory =>
     case (FractionLiteral(_, d), _) => {
       () => d != 0
     }
+    // TODO: Function calls.
   }
 
   private def zero(tpe: Type): Expr = tpe match {
