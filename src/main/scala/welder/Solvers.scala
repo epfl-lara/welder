@@ -33,6 +33,25 @@ trait Solvers { self: Theory =>
     case (AsInstanceOf(expr, tpe), path) => {
       () => checkNegationUnsat(IsInstanceOf(expr, tpe), path.conditions)
     }
+    case (Division(lhs, rhs), path) => {
+      () => checkNegationUnsat(Not(Equals(rhs, zero(rhs.getType))), path.conditions)
+    }
+    case (Remainder(lhs, rhs), path) => {
+      () => checkNegationUnsat(Not(Equals(rhs, zero(rhs.getType))), path.conditions)
+    }
+    case (Modulo(lhs, rhs), path) => {
+      () => checkNegationUnsat(Not(Equals(rhs, zero(rhs.getType))), path.conditions)
+    }
+    case (FractionLiteral(_, d), _) => {
+      () => d != 0
+    }
+  }
+
+  private def zero(tpe: Type): Expr = tpe match {
+    case IntegerType => IntegerLiteral(0)
+    case RealType => FractionLiteral(0, 1)
+    case BVType(n) => BVLiteral(0, n)
+    case _ => throw new Error("zero: Not a numeric type.")
   }
 
   /** Tries to prove an expression using an SMT solver.
@@ -95,7 +114,7 @@ trait Solvers { self: Theory =>
   }
 
   private def checkNegationUnsat(expr: Expr, assumptions: Seq[Expr]): Boolean = {
-    val negation = Not(Implies(and(assumptions : _*), expr))
+    val negation = not(implies(and(assumptions : _*), expr))
     val solver = factory.getNewSolver.setTimeout(5000L)
 
     try {
