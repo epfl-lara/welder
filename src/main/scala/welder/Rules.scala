@@ -167,6 +167,33 @@ trait Rules { self: Theory =>
       case _ => Attempt.fail("Can not apply rule orE on non-disjunction expression " + disjunction.expression + ".")
     }
 
+  /** Proves an expression using case analysis on a proven disjunction.
+   *
+   * @param disjunction A proven disjunction.
+   * @param conclusion  An expression to be proved.
+   * @param cases       A sequence of proof functions, one for each disjunct.
+   * @return A theorem for the `conclusion`. 
+   */
+  def orE(disjunction: Theorem, conclusion: Expr, cases: Seq[(Theorem, Goal) => Attempt[Witness]]): Attempt[Theorem] =
+    disjunction.expression match {
+      case Or(alternatives) if (cases.size >= alternatives.size) => {
+        val attempts = alternatives.zip(cases).map { case (expr, fun) =>
+          val (hyp, mark) = new Theorem(expr).mark
+          val goal = new Goal(conclusion)
+
+          catchFailedAttempts {
+            fun(hyp, goal) flatMap { (witness: Witness) => witness.extractTheorem(goal).map(_.unmark(mark)) }
+          }
+        }
+
+        Attempt.all(attempts) map { (theorems: Seq[Theorem]) =>
+          new Theorem(conclusion).from(theorems)
+        }
+      }
+      case Or(_) => Attempt.fail("Not enough cases provided in orE.")
+      case _ => Attempt.fail("Can not apply rule orE on non-disjunction expression " + disjunction.expression + ".")
+    }
+
   def orToImpl(disjunction: Theorem): Attempt[Seq[Theorem]] = disjunction.expression match {
     case Or(expressions) =>
       Attempt.success {
