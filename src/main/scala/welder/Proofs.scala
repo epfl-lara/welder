@@ -10,7 +10,7 @@ trait Proofs { self: Theory =>
   type MetaIdentifier = String
 
   sealed abstract class Proof
-  case class Variable(id: MetaIdentifier) extends Proof
+  case class Var(id: MetaIdentifier) extends Proof
   case class Axiom(theorem: Theorem) extends Proof
   case class ImplI(id: MetaIdentifier, hypothesis: Expr, conclusion: Proof) extends Proof
   case class ImplE(implication: Proof, hypothesis: Proof) extends Proof
@@ -20,13 +20,13 @@ trait Proofs { self: Theory =>
   case class AndE(conjunction: Proof, parts: Seq[MetaIdentifier], body: Proof) extends Proof
   case class OrI(alternatives: Seq[Expr], theorem: Proof) extends Proof
   case class OrE(disjunction: Proof, conclusion: Expr, id: MetaIdentifier, cases: Seq[Proof]) extends Proof
-  // case class NaturalInduction(expr: Expr, base: Expr, id: MetaIdentifier, baseCase: Proof, inductiveCase: Proof) extends Proof
   case class Prove(expr: Expr, hypotheses: Seq[Proof]) extends Proof
   case class Let(named: Proof, id: MetaIdentifier, body: Proof) extends Proof
+  case class NaturalInduction(vd: ValDef, expr: Expr, base: Expr, id: MetaIdentifier, baseCase: Proof, inductiveCase: Proof) extends Proof
 
   def interpret(proof: Proof): Attempt[Theorem] = {
     def go(proof: Proof, bindings: Map[MetaIdentifier, Theorem]): Attempt[Theorem] = proof match {
-      case Variable(id) => bindings.get(id).map(Attempt.success(_)).getOrElse(Attempt.fail("No such meta variable: " + id))
+      case Var(id) => bindings.get(id).map(Attempt.success(_)).getOrElse(Attempt.fail("No such meta variable: " + id))
       case Axiom(theorem) => theorem
       case ImplI(id, hypothesis, conclusion) => implI(hypothesis) { theorem =>
         go(conclusion, bindings + (id -> theorem))
