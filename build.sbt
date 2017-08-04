@@ -1,7 +1,7 @@
 
 name := "Welder"
 version := "0.1"
-organization := "ch.lara.epfl"
+organization := "ch.epfl.lara"
 
 scalaVersion := "2.11.8"
 scalacOptions += "-feature"
