@@ -2,43 +2,17 @@
 
 import inox._
 import inox.trees._
-import inox.trees.dsl._
 import inox.trees.interpolator._
 import welder._
 
-object GaussExample {
-
-  // We create an identifier for the function.
-  val sum = FreshIdentifier("sum")
+object Gauss {
 
   // We define the sum function.
-  val sumFunction = mkFunDef(sum)() { case _ =>
-
-    // The function takes only one argument, of type `BigInt`.
-    val args: Seq[ValDef] = Seq("n" :: IntegerType)
-
-    // It returns a `BigInt`.
-    val retType: Type = IntegerType
-
-    // Its body is defined as:
-    val body: Seq[Variable] => Expr = { case Seq(n) =>
-      if_ (n === E(BigInt(0))) {
-        // We return `0` if the argument is `0`.
-        E(BigInt(0))
-      } else_ {
-        // We call the function recursively on `n - 1` in other cases.
-        val predN = n - E(BigInt(1))     
-        E(sum)(predN) + n
-      }
-    }
-
-    (args, retType, body)
-  }
+  val sumFunction: FunDef = fd"def sum(n: Integer) = if (n == 0) 0 else n + sum(n - 1)"
 
   // Our program simply consists of the `sum` function.
-  val sumProgram = InoxProgram(Context.empty,
-                     NoSymbols.withFunctions(Seq(sumFunction)))
-  val theory = theoryOf(sumProgram)
+  val sumProgram: InoxProgram = Program(inox.trees)(NoSymbols.withFunctions(Seq(sumFunction)))
+  val theory: Theory = theoryOf(sumProgram)
   import theory._
 
   // The property we want to prove, as a function of `n`.
@@ -50,8 +24,8 @@ object GaussExample {
   // The property we want to prove is defined just above.
   // The base expression is `0`.
   // The proof for the base case is trivial.
-  val gaussTheorem = naturalInduction(property(_), e"0", trivial) { 
-    case (ihs, goal) =>
+  val gaussTheorem: Theorem = naturalInduction(property(_), e"0", trivial) {
+    case (ihs, _) =>
       // `ihs` contains induction hypotheses
       // and `goal` contains the property that needs to be proven.
 

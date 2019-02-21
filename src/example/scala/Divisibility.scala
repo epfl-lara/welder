@@ -5,21 +5,21 @@ import inox.trees._
 import inox.trees.interpolator._
 import welder._
 
-object DivisibilityExample {
+object Divisibility {
 
-  val emptyProgram = InoxProgram(Context.empty, NoSymbols)
-  val theory = theoryOf(emptyProgram)
+  val emptyProgram: InoxProgram = Program(inox.trees)(NoSymbols)
+  val theory: Theory = theoryOf(emptyProgram)
   import theory._
 
   // Property stating that x divides y.
-  def divides(x: Expr, y: Expr): Expr = e"∃k. $x * k == $y"
+  def divides(x: Expr, y: Expr): Expr = e"!forall k => $x * k != $y"
 
   // Theorem stating that if x divides y, then x also divides any multiple of y.
-  lazy val divisorMultiples =
-    forallI(v"x: BigInt", v"y: BigInt") { (x: Variable, y: Variable) =>  // For any x and y.
-      implI(divides(x, y)) { (xDividesY: Theorem) =>  // If x divides y.
+  lazy val divisorMultiples: Theorem =
+    forallI(vd"x: BigInt", vd"y: BigInt") { (x: Variable, y: Variable) =>  // For any x and y.
+      implI(divides(x, y)) { xDividesY: Theorem =>  // If x divides y.
         val (k, xTimesKisY) = xDividesY.existsE.get  // Get the value k such that x * k == y.
-        forallI(v"z: BigInt") { (z: Variable) =>  // Then for any z.
+        forallI(vd"z: BigInt") { z: Variable =>  // Then for any z.
           prove(e"$x * ($k * $z) == $y * $z", xTimesKisY) // Show that x * (k * z) == y * z, from the fact that x * k == y.
             .existsI(e"$k * $z", "l")  // Conclude that there exists a value l such that x * l == y * z. A witness is k * z.
         }
@@ -27,8 +27,8 @@ object DivisibilityExample {
     }
 
   // The quotient-remainder theorem, stating that, for any a and b, there exists q and r such that a = q * b + r.
-  lazy val quotientRemainder = forallI(v"a: BigInt", v"b: BigInt") { (a: Variable, b: Variable) =>
-    implI(e"$b != 0") { (bNonZero: Theorem) =>
+  lazy val quotientRemainder: Theorem = forallI(vd"a: BigInt", vd"b: BigInt") { (a: Variable, b: Variable) =>
+    implI(e"$b != 0") { bNonZero: Theorem =>
       val q = e"$a / $b"
       val r = e"$a % $b"
       prove(e"$a == $q * $b + $r", bNonZero)
@@ -38,15 +38,15 @@ object DivisibilityExample {
   }
 
   // Theorem relating the integer division and remainder operations.
-  lazy val remainderDefinition = forallI(v"n: BigInt", v"m: BigInt") { (n: Variable, m: Variable) =>
-    implI(e"$m != 0") { (mPositive: Theorem) =>
+  lazy val remainderDefinition: Theorem = forallI(vd"n: BigInt", vd"m: BigInt") { (n: Variable, m: Variable) =>
+    implI(e"$m != 0") { mPositive: Theorem =>
       prove(e"$n % $m == $n - ($n / $m) * $m", mPositive)
     }
   }
 
   // Theorem stating that, for any x != 0 and n, (x * n) / x == n.
-  lazy val wholeDivision = forallI(v"x: BigInt") { (x: Variable) =>
-    implI(e"$x != 0") { (xNonZero: Theorem) =>
+  lazy val wholeDivision: Theorem = forallI(vd"x: BigInt") { x: Variable =>
+    implI(e"$x != 0") { xNonZero: Theorem =>
 
       // We first state the theorem for all n >= 0.
       val nPos = {
@@ -75,8 +75,8 @@ object DivisibilityExample {
 
       // We then state the theorem for negative n's.
       val nNeg = {
-        forallI(v"n: BigInt") { (n: Variable) =>
-          implI(e"$n < 0") { (nNeg: Theorem) =>
+        forallI(vd"n: BigInt") { n: Variable =>
+          implI(e"$n < 0") { nNeg: Theorem =>
 
             // We apply the theorem for -n, since -n is positive.
             val lemma = nPos.forallE(e"-$n").implE(_.by(nNeg))
@@ -98,7 +98,7 @@ object DivisibilityExample {
       }
 
       // Then, we can finally state the theorem for an arbitrary n.
-      forallI(v"n: BigInt") { (n: Variable) =>
+      forallI(vd"n: BigInt") { n: Variable =>
 
         // We have that n is either negative or positive.
         val nEitherPosOrNeg = prove(e"$n < 0 || $n >= 0")
@@ -125,12 +125,12 @@ object DivisibilityExample {
 
   // Theorem stating that, for any non-zero x and arbitrary y,
   // x divides y if and only if the remainder of the division by x of y is zero. 
-  lazy val dividesRemainder = 
-    forallI(v"x: BigInt", v"y: BigInt") { (x: Variable, y: Variable) => 
-      implI(e"$x != 0") { (xNonZero: Theorem) => 
+  lazy val dividesRemainder: Theorem =
+    forallI(vd"x: BigInt", vd"y: BigInt") { (x: Variable, y: Variable) =>
+      implI(e"$x != 0") { xNonZero: Theorem =>
 
         // First direction. We assume that x divides y.
-        val dir1 = implI(divides(x, y)) { (xDividesY: Theorem) =>
+        val dir1 = implI(divides(x, y)) { xDividesY: Theorem =>
           val (k, xTimesKisY) = xDividesY.existsE.get
 
           // We apply the lemma about whole division to x and k.
@@ -154,7 +154,7 @@ object DivisibilityExample {
         }
 
         // Second direction. We assume that y % x = 0.
-        val dir2 = implI(e"$y % $x == 0") { (remainderZero: Theorem) =>
+        val dir2 = implI(e"$y % $x == 0") { remainderZero: Theorem =>
           val lemma =
             e"$y - ($y / $x) * $x"              ==|
               andI(xNonZero, remainderDefinition) |
