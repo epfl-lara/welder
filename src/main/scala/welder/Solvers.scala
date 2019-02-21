@@ -14,53 +14,55 @@ trait Solvers { self: Theory =>
   implicit val debugSection = DebugSectionWelder
 
   // Factory of solvers.
-  private lazy val factory = solvers.SolverFactory.default(program)
-  
-  private lazy val assumptionsCollector = CollectorWithPC(program) {
-    case (Assume(cond, _), path) => () => checkNegationUnsat(cond, path.conditions)
-    case (cons@ADT(adtType, exprs), path) if adtType.getADT.hasInvariant => {
-      val adt = adtType.getADT
-      val invariantApply = FunctionInvocation(adt.invariant.get.id, adt.tps, Seq(cons))
-      () => checkNegationUnsat(invariantApply, path.conditions)
-    }
-    case (Choose(vd, pred), path) => {
-      val vdFresh = vd.freshen
-      val conditions = path.conditions.map(exprOps.replaceFromSymbols(Map(vd -> vdFresh.toVariable), _))
-      val freeVars = (pred +: conditions).map(exprOps.variablesOf(_)).reduce(_ ++ _).map(_.toVal) - vd
-      // Not supported by Inox:
-      // val forall = Forall(freeVars.toSeq, implies(and(conditions : _*), not(Forall(Seq(vd), not(pred)))))
-      // () => checkNegationUnsat(forall, Seq())
-      if (freeVars.isEmpty) {
-        println(implies(and(conditions : _*), pred))
-        () => checkSat(implies(and(conditions : _*), pred))
+  private lazy val factory = solvers.SolverFactory(program, ctx)
+
+  object assumptionsCollector {
+    def collect(expr: Expr): Seq[() => Boolean] = program.symbols.collectWithPC(expr)  {
+      case (Assume(cond, _), path) => () => checkNegationUnsat(cond, path.conditions)
+      case (cons@ADT(id, tps, exprs), path) if cons.getConstructor.sort.hasInvariant => {
+        val sort = cons.getConstructor.sort
+        val invariantApply = FunctionInvocation(sort.invariant.get.id, sort.tps, Seq(cons))
+        () => checkNegationUnsat(invariantApply, path.conditions)
       }
-      else {
-        // TODO: Can we do better here ?
-        () => false
+      case (Choose(vd, pred), path) => {
+        val vdFresh = vd.freshen
+        val conditions = path.conditions.map(exprOps.replaceFromSymbols(Map(vd -> vdFresh.toVariable), _))
+        val freeVars = (pred +: conditions).map(exprOps.variablesOf(_)).reduce(_ ++ _).map(_.toVal) - vd
+        // Not supported by Inox:
+        // val forall = Forall(freeVars.toSeq, implies(and(conditions : _*), not(Forall(Seq(vd), not(pred)))))
+        // () => checkNegationUnsat(forall, Seq())
+        if (freeVars.isEmpty) {
+          println(implies(and(conditions : _*), pred))
+          () => checkSat(implies(and(conditions : _*), pred))
+        }
+        else {
+          // TODO: Can we do better here ?
+          () => false
+        }
       }
+      //    case (AsInstanceOf(expr, tpe), path) => {
+      //      () => checkNegationUnsat(IsInstanceOf(expr, tpe), path.conditions)
+      //    }
+      case (Division(lhs, rhs), path) => {
+        () => checkNegationUnsat(Not(Equals(rhs, zero(rhs.getType))), path.conditions)
+      }
+      case (Remainder(lhs, rhs), path) => {
+        () => checkNegationUnsat(Not(Equals(rhs, zero(rhs.getType))), path.conditions)
+      }
+      case (Modulo(lhs, rhs), path) => {
+        () => checkNegationUnsat(Not(Equals(rhs, zero(rhs.getType))), path.conditions)
+      }
+      case (FractionLiteral(_, d), _) => {
+        () => d != 0
+      }
+      // TODO: Function calls.
     }
-    case (AsInstanceOf(expr, tpe), path) => {
-      () => checkNegationUnsat(IsInstanceOf(expr, tpe), path.conditions)
-    }
-    case (Division(lhs, rhs), path) => {
-      () => checkNegationUnsat(Not(Equals(rhs, zero(rhs.getType))), path.conditions)
-    }
-    case (Remainder(lhs, rhs), path) => {
-      () => checkNegationUnsat(Not(Equals(rhs, zero(rhs.getType))), path.conditions)
-    }
-    case (Modulo(lhs, rhs), path) => {
-      () => checkNegationUnsat(Not(Equals(rhs, zero(rhs.getType))), path.conditions)
-    }
-    case (FractionLiteral(_, d), _) => {
-      () => d != 0
-    }
-    // TODO: Function calls.
   }
 
   private def zero(tpe: Type): Expr = tpe match {
-    case IntegerType => IntegerLiteral(0)
-    case RealType => FractionLiteral(0, 1)
-    case BVType(n) => BVLiteral(0, n)
+    case IntegerType() => IntegerLiteral(0)
+    case RealType() => FractionLiteral(0, 1)
+    case BVType(s, n) => BVLiteral(s, 0, n)
     case _ => throw new Error("zero: Not a numeric type.")
   }
 
@@ -88,7 +90,7 @@ trait Solvers { self: Theory =>
    * @return The expression `expr` as a `Theorem`.
    */ 
   def prove(expr: Expr, assumptions: Seq[Theorem]): Attempt[Theorem] = {
-    if (expr.getType != BooleanType) {
+    if (expr.getType != BooleanType()) {
       Attempt.typeError("prove", expr.getType)
     }
     else {
@@ -111,7 +113,7 @@ trait Solvers { self: Theory =>
   }
 
   private def checkSat(expr: Expr): Boolean = {
-    val solver = factory.getNewSolver.setTimeout(5000L)
+    val solver = factory.getNewSolver().setTimeout(5000L)
     try {
       solver.assertCnstr(expr)
       val result = solver.check(SolverResponses.Simple)
@@ -125,7 +127,7 @@ trait Solvers { self: Theory =>
 
   private def checkNegationUnsat(expr: Expr, assumptions: Seq[Expr]): Boolean = {
     val negation = not(implies(and(assumptions : _*), expr))
-    val solver = factory.getNewSolver.setTimeout(5000L)
+    val solver = factory.getNewSolver().setTimeout(5000L)
 
     try {
       solver.assertCnstr(negation)

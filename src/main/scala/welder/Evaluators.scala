@@ -13,7 +13,7 @@ trait Evaluators { self: Theory =>
   // The evaluator.
   private lazy val evaluator: DeterministicEvaluator { val program: InoxProgram } = {
     val program = self.program
-    RecursiveEvaluator.default(program)
+    RecursiveEvaluator(program, ctx)
   }
 
   /** Returns a `Theorem` stating the equality of
@@ -61,7 +61,7 @@ trait Evaluators { self: Theory =>
       // No expression satisfying path.
       return Attempt.fail("No expression satisfying the provided path.")
     }
-    if (!focuses.tail.isEmpty) {
+    if (focuses.tail.nonEmpty) {
       // Ambiguity here.
       return Attempt.fail("Path is ambiguous.")
     }

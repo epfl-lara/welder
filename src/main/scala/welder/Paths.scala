@@ -4,9 +4,6 @@ package welder
 
 import scala.reflect.ClassTag
 
-import inox._
-import inox.ast._
-
 /** Contains definitions related to paths within expressions. */
 trait Paths { self: Theory =>
   
@@ -132,13 +129,13 @@ trait Paths { self: Theory =>
         protected override val previous = Some(thiz)
 
         protected override def focuses(expr: Expr): Stream[Focus] = {
-          val (vs, es, ts, builder) = deconstructor.deconstruct(expr)
+          val (is, vs, es, ts, fs, builder) = deconstructor.deconstruct(expr)
 
           es.toStream.zip(Stream.from(0)).flatMap { case (e, index) =>
             if (descriptor.describes(e)) {
               Stream(new Focus {
                 val get = e
-                def set(e: Expr) = builder(vs, es.updated(index, e), ts)
+                def set(e: Expr) = builder(is, vs, es.updated(index, e), ts, fs)
               })
             }
             else {
@@ -157,13 +154,13 @@ trait Paths { self: Theory =>
         protected override val previous = Some(thiz)
 
         protected override def focuses(expr: Expr): Stream[Focus] = {
-          val (vs, es, ts, builder) = deconstructor.deconstruct(expr)
+          val (is, vs, es, ts, fs, builder) = deconstructor.deconstruct(expr)
 
 
           selector.select(expr, es) map { (index: Int) =>
             new Focus {
               val get = es(index)
-              def set(e: Expr) = builder(vs, es.updated(index, e), ts)
+              def set(e: Expr) = builder(is, vs, es.updated(index, e), ts, fs)
             }
           }
         }
@@ -178,21 +175,21 @@ trait Paths { self: Theory =>
         protected override val previous = Some(thiz)
 
         protected override def focuses(expr: Expr): Stream[Focus] = {
-          val (vs, es, ts, builder) = deconstructor.deconstruct(expr)
+          val (is, vs, es, ts, fs, builder) = deconstructor.deconstruct(expr)
 
           es.toStream.zip(Stream.from(0)).flatMap { case (e, index) =>
 
             def rest = focuses(e).map { (f: Focus) =>
               new Focus {
                 val get = f.get
-                def set(inner: Expr) = builder(vs, es.updated(index, f.set(inner)), ts)
+                def set(inner: Expr) = builder(is, vs, es.updated(index, f.set(inner)), ts, fs)
               }
             }
 
             if (descriptor.describes(e)) {
               val focus = new Focus {
                 val get = e
-                def set(inner: Expr) = builder(vs, es.updated(index, inner), ts)
+                def set(inner: Expr) = builder(is, vs, es.updated(index, inner), ts, fs)
               }
 
               focus +: rest
@@ -213,7 +210,7 @@ trait Paths { self: Theory =>
         protected override val previous = thiz.previous
 
         protected override def focuses(expr: Expr): Stream[Focus] = {
-          thiz.focuses(expr).drop(index).take(1)
+          thiz.focuses(expr).slice(index, index + 1)
         }
       }
     }

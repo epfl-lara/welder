@@ -11,7 +11,8 @@ import Matchers._
 class RelationalReasoningDSLTypingSuite extends FunSuite {
 
   object Empty extends Theory {
-    override val program = InoxProgram(Context.empty, NoSymbols)
+    override val program = Program(inox.trees)(NoSymbols)
+    override val ctx = Context.empty
   }
 
   import Empty._

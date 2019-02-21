@@ -3,7 +3,7 @@ package welder
 
 import inox._
 import inox.trees._
-import inox.trees.dsl._
+import inox.trees.interpolator._
 
 import org.scalatest._
 
@@ -11,20 +11,10 @@ class MarkingsSuite extends FunSuite {
 
   object ListTheory extends Theory {
 
-    val list: Identifier = FreshIdentifier("List")
-    val cons: Identifier = FreshIdentifier("Cons")
-    val nil: Identifier = FreshIdentifier("Nil")
-    val head: Identifier = FreshIdentifier("head")
-    val tail: Identifier = FreshIdentifier("tail")
+    val definition = td"type List[A] = Cons(head: A, tail: List[A]) | Nil()"
 
-    val listSort = mkSort(list)("A")(Seq(cons, nil))
-    val consConstructor = mkConstructor(cons)("A")(Some(list)) {
-      case Seq(tp) =>
-        Seq(ValDef(head, tp), ValDef(tail, T(list)(tp)))
-    }
-    val nilConstructor = mkConstructor(nil)("A")(Some(list))(tps => Seq.empty)
-
-    override val program = InoxProgram(Context.empty, NoSymbols.withADTs(Seq(listSort, consConstructor, nilConstructor)))
+    override val program = Program(inox.trees)(NoSymbols.withSorts(Seq(definition)))
+    override val ctx = Context.empty
   }
 
   import ListTheory._
@@ -83,16 +73,16 @@ class MarkingsSuite extends FunSuite {
 
     def property(x: Expr) = Equals(x, x)
 
-    val legal = structuralInduction(property(_), "xs" :: T(list)(IntegerType)) { case (ihs, goal) =>
+    val legal = structuralInduction(property(_), vd"xs: List[Integer]") { case (ihs, goal) =>
       ihs.expression match {
-        case C(name, head, tail) if name == cons => {
+        case e"Cons($_, $tail)" => {
 
           // Save the induction hypothesis.
           illegal = ihs.hypothesis(tail).get
 
           goal.trivial
         }
-        case C(name) if name == nil => {
+        case e"Nil()" => {
           goal.trivial
         }
       }

@@ -9,5 +9,6 @@ package object welder {
 
   def theoryOf(pgm: InoxProgram): Theory = new Theory {
     override val program = pgm
+    override val ctx = Context.empty
   }
 } 

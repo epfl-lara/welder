@@ -55,18 +55,15 @@ trait ADTs { self: Theory =>
 
     val allCases = {
 
-      val constructors = tpe.getADT match {
-        case sort: TypedADTSort => sort.constructors
-        case cons: TypedADTConstructor => Seq(cons)
-      }
+      val constructors = tpe.getSort.constructors
 
-      constructors map { (constructor: TypedADTConstructor) =>
-        val variables = constructor.fields map { (field: ValDef) =>
+      constructors map { constructor: TypedADTConstructor =>
+        val variables = constructor.fields map { field: ValDef =>
           val name = field.toVariable.id.name
           Variable.fresh(name, field.tpe)
         }
 
-        val expr = ADT(constructor.toType, variables)
+        val expr = ADT(constructor.id, constructor.tps, variables)
 
         (expr, variables, constructor.definition.id)
       }
@@ -113,7 +110,7 @@ trait ADTs { self: Theory =>
       }
     }
 
-    Attempt.all(attempts) map { (theorems: Seq[Theorem]) =>
+    Attempt.all(attempts) map { theorems: Seq[Theorem] =>
       val x = valDef.freshen
       new Theorem(Forall(Seq(x), p(x.toVariable))).from(theorems)
     }

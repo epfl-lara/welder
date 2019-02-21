@@ -5,7 +5,6 @@ package welder
 import scala.language.implicitConversions
 
 import inox._
-import inox.trees._
 
 /** Theory over a program. */
 trait Theory
@@ -19,6 +18,7 @@ trait Theory
 
   // Program over which theorems are stated.
   val program: InoxProgram
+  val ctx: Context
 
   import program.trees._
   implicit lazy val symbols = program.symbols
@@ -37,7 +37,7 @@ trait Theory
   class Theorem private[welder] (val expression: Expr, 
       private[welder] val markings: Set[Mark] = Set()) {
 
-    require(expression.getType == BooleanType)
+    require(expression.getType == BooleanType())
 
     /** Mark this Theorem with a fresh marking.
      *
@@ -133,9 +133,9 @@ trait Theory
     /** Negation elimination. */
     def notE: Attempt[Theorem] = self.notE(this)
 
-    /** Type instantiation. */
-    def instantiateType(tpeParam: TypeParameter, tpe: Type): Theorem =
-      new Theorem(symbols.instantiateType(this.expression, Map(tpeParam -> tpe))).from(this)
+//    /** Type instantiation. */
+//    def instantiateType(tpeParam: TypeParameter, tpe: Type): Theorem =
+//      new Theorem(symbols.instantiateType(this.expression, Map(tpeParam -> tpe))).from(this)
   }
 
   /** Markings, used to taint Theorems that are valid only in a specific scope. */
@@ -157,7 +157,7 @@ trait Theory
 
   /** States a goal, in the form of an expression to be proved. */
   class Goal(val expression: Expr) { 
-    require(expression.getType == BooleanType, "Non-boolean expression: " + expression)
+    require(expression.getType == BooleanType(), "Non-boolean expression: " + expression)
 
     /** Tries to satisfy the goal.
      *
@@ -221,10 +221,10 @@ trait Theory
     val hole = Variable.fresh("hole", tpe)
     val expr = f(hole)
 
-    import program.ctx.reporter._
+    import ctx.reporter._
 
     (x: Expr) => {
-      val a = exprOps.replaceFromSymbols(Map((hole -> x)), expr)
+      val a = exprOps.replaceFromSymbols(Map(hole -> x), expr)
 
       if (isDebugEnabled(DebugSectionWelder)) {
         val b = f(x)
@@ -353,19 +353,19 @@ trait Theory
 
 
   def forallToPredicate(x: Expr, tpe: Type): Attempt[Expr => Expr] = x match {
-    case Forall(Seq(n), e) if n.tpe == tpe => Attempt.success { (expr: Expr) => 
-      exprOps.replaceFromSymbols(Map((n -> expr)), e)
+    case Forall(Seq(n), e) if n.tpe == tpe => Attempt.success { expr: Expr =>
+      exprOps.replaceFromSymbols(Map(n -> expr), e)
     }
-    case Forall(ns, e) if ns(0).tpe == tpe => Attempt.success { (expr: Expr) => 
-      exprOps.replaceFromSymbols(Map((ns(0) -> expr)), Forall(ns.tail, e))
+    case Forall(ns, e) if ns(0).tpe == tpe => Attempt.success { expr: Expr =>
+      exprOps.replaceFromSymbols(Map(ns(0) -> expr), Forall(ns.tail, e))
     }
     case _ => Attempt.fail("Could not transform expression into predicate.")
   }
 
   /** States that the goal can be trivially proven. */
   object trivial extends Success[Witness](new ImplicationWitness(truth))
-                    with Function1[Goal, Attempt[Witness]]
-                    with Function2[Theorem, Goal, Attempt[Witness]] {
+                    with (Goal => Attempt[Witness])
+                    with ((Theorem, Goal) => Attempt[Witness]) {
 
     override def apply(goal: Goal): Attempt[Witness] = goal.trivial
     override def apply(theorem: Theorem, goal: Goal): Attempt[Witness] = {

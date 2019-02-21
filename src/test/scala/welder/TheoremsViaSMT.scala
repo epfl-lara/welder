@@ -10,7 +10,8 @@ import org.scalatest._
 class TheoremsViaSMTSuite extends FunSuite {
 
   object Empty extends Theory {
-    override val program = InoxProgram(Context.empty, NoSymbols)
+    override val program = Program(inox.trees)(NoSymbols)
+    override val ctx = Context.empty
   }
 
   import Empty._
@@ -45,8 +46,8 @@ class TheoremsViaSMTSuite extends FunSuite {
     }
   }
 
-  val numericTypes = Seq(IntegerType, Int32Type, RealType)
-  val types = numericTypes ++ Seq(BooleanType, StringType, CharType, UnitType, FunctionType(Seq(IntegerType), IntegerType))
+  val numericTypes = Seq(IntegerType(), Int32Type(), RealType())
+  val types = numericTypes ++ Seq(BooleanType(), StringType(), CharType(), UnitType(), FunctionType(Seq(IntegerType()), IntegerType()))
 
   for (tpe <- types) viaSMT("Reflexivity of Equality", reflexivity, tpe)
   for (tpe <- types) viaSMT("Symmetry of Equality", symmetry, tpe)

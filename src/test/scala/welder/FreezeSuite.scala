@@ -10,7 +10,8 @@ import org.scalatest._
 class FreezeSuite extends FunSuite {
   
   object Empty extends Theory {
-    override val program = InoxProgram(Context.empty, NoSymbols)
+    override val program: InoxProgram = Program(inox.trees)(NoSymbols)
+    override val ctx: Context = Context.empty
   }
 
   import Empty._
@@ -23,28 +24,28 @@ class FreezeSuite extends FunSuite {
 
     def original(x: Expr) = BooleanLiteral(false)
 
-    val frozen = freeze(IntegerType, original)
+    val frozen = freeze(IntegerType(), original)
 
     val assertSameOn = assertSameResult(original, frozen) _
 
     assertSameOn(IntegerLiteral(12))
-    assertSameOn(Variable.fresh("x", IntegerType))
+    assertSameOn(Variable.fresh("x", IntegerType()))
     assertSameOn(Plus(IntegerLiteral(17), IntegerLiteral(-5)))
-    assertSameOn(Division(IntegerLiteral(1), Variable.fresh("y", IntegerType)))
+    assertSameOn(Division(IntegerLiteral(1), Variable.fresh("y", IntegerType())))
   }
 
   test("Freeze works on well-behaved functions") {
 
     def original(x: Expr) = Times(Plus(x, IntegerLiteral(5)), IntegerLiteral(2))
 
-    val frozen = freeze(IntegerType, original)
+    val frozen = freeze(IntegerType(), original)
 
     val assertSameOn = assertSameResult(original, frozen) _
 
     assertSameOn(IntegerLiteral(12))
-    assertSameOn(Variable.fresh("x", IntegerType))
+    assertSameOn(Variable.fresh("x", IntegerType()))
     assertSameOn(Plus(IntegerLiteral(17), IntegerLiteral(-5)))
-    assertSameOn(Division(IntegerLiteral(1), Variable.fresh("y", IntegerType)))
+    assertSameOn(Division(IntegerLiteral(1), Variable.fresh("y", IntegerType())))
   }
 
   test("Freeze works on ill-behaved functions (procedures)") {
@@ -59,15 +60,15 @@ class FreezeSuite extends FunSuite {
     // Checks that the function is indeed ill-behaved.
     assert(original(IntegerLiteral(1)) != original(IntegerLiteral(1)))
 
-    val frozen = freeze(IntegerType, original)
+    val frozen = freeze(IntegerType(), original)
 
     // Checks that frozen returns the same result in each invocation.
     val assertSameOn = assertSameResult(frozen, frozen) _
 
     assertSameOn(IntegerLiteral(12))
-    assertSameOn(Variable.fresh("x", IntegerType))
+    assertSameOn(Variable.fresh("x", IntegerType()))
     assertSameOn(Plus(IntegerLiteral(17), IntegerLiteral(-5)))
-    assertSameOn(Division(IntegerLiteral(1), Variable.fresh("y", IntegerType)))
+    assertSameOn(Division(IntegerLiteral(1), Variable.fresh("y", IntegerType())))
   }
 
   test("Freeze works on ill-behaved functions (functions inspecting their argument)") {
@@ -79,15 +80,14 @@ class FreezeSuite extends FunSuite {
     }
 
     val evaluator: DeterministicEvaluator { val program: InoxProgram } = {
-      val program = Empty.program
-      RecursiveEvaluator.default(program)
+      RecursiveEvaluator(Empty.program, Empty.ctx)
     }
 
     // Checks that the function is indeed ill-behaved.
     assert(evaluator.eval(original(Plus(IntegerLiteral(1), IntegerLiteral(1)))) != 
       evaluator.eval(original(IntegerLiteral(2))))
 
-    val frozen = freeze(IntegerType, original)
+    val frozen = freeze(IntegerType(), original)
 
     // Checks that the frozen function is indeed well-behaved.
     assert(evaluator.eval(frozen(Plus(IntegerLiteral(1), IntegerLiteral(1)))) == 
@@ -97,8 +97,8 @@ class FreezeSuite extends FunSuite {
     val assertSameOn = assertSameResult(frozen, frozen) _
 
     assertSameOn(IntegerLiteral(12))
-    assertSameOn(Variable.fresh("x", IntegerType))
+    assertSameOn(Variable.fresh("x", IntegerType()))
     assertSameOn(Plus(IntegerLiteral(17), IntegerLiteral(-5)))
-    assertSameOn(Division(IntegerLiteral(1), Variable.fresh("y", IntegerType)))
+    assertSameOn(Division(IntegerLiteral(1), Variable.fresh("y", IntegerType())))
   }
 }

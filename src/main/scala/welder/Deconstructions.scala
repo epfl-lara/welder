@@ -50,18 +50,15 @@ trait Deconstructions { self: Theory =>
 
     def cases(tpe: ADTType): Seq[(Constructor, Expression, Seq[Variable])] = {
 
-      val constructors = tpe.getADT match {
-        case sort: TypedADTSort => sort.constructors
-        case cons: TypedADTConstructor => List(cons)
-      }
+      val constructors = tpe.getSort.constructors
 
-      constructors map { (constructor: TypedADTConstructor) =>
+      constructors map { constructor: TypedADTConstructor =>
         val variables = constructor.fields map { (field: ValDef) =>
           val name = field.toVariable.id.name
           Variable.fresh(name, field.tpe)
         }
 
-        val expr = ADT(constructor.toType, variables)
+        val expr = ADT(constructor.id, constructor.tps, variables)
 
         (constructor.definition.id, expr, variables)
       }

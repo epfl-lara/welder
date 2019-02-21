@@ -2,16 +2,20 @@
 
 package welder
 
-import inox._
-import inox.ast._
-
 /** Contains methods and theorems related to arithmetic. */
 trait Arithmetic { self: Theory =>
   
   import program.trees._
 
+  private def isNumericType(tpe: Type): Boolean = tpe match {
+    case IntegerType() => true
+    case BVType(_, _) => true
+    case RealType() => true
+    case _ => false
+  }
+
   def plusCommutativity(tpe: Type): Attempt[Theorem] = {
-    if (numericType(tpe) == Untyped) {
+    if (!isNumericType(tpe)) {
       Attempt.typeError("plusCommutativity", tpe)
     } else Attempt.success {
 
@@ -20,12 +24,12 @@ trait Arithmetic { self: Theory =>
 
       val expr = Equals(Plus(a, b), Plus(b, a))
 
-      new Theorem(forall(Seq(a.toVal, b.toVal), expr))
+      new Theorem(Forall(Seq(a.toVal, b.toVal), expr))
     }
   }
 
   def plusAssociativity(tpe: Type): Attempt[Theorem] = {
-    if (numericType(tpe) == Untyped) {
+    if (!isNumericType(tpe)) {
       Attempt.typeError("plusAssociativity", tpe)
     } else Attempt.success {
 
@@ -35,12 +39,12 @@ trait Arithmetic { self: Theory =>
 
       val expr = Equals(Plus(a, Plus(b, c)), Plus(Plus(a, b), c))
 
-      new Theorem(forall(Seq(a.toVal, b.toVal, c.toVal), expr))
+      new Theorem(Forall(Seq(a.toVal, b.toVal, c.toVal), expr))
     }
   }
 
   def timesCommutativity(tpe: Type): Attempt[Theorem] = {
-    if (numericType(tpe) == Untyped) {
+    if (!isNumericType(tpe)) {
       Attempt.typeError("timesCommutativity", tpe)
     } else Attempt.success {
 
@@ -49,12 +53,12 @@ trait Arithmetic { self: Theory =>
 
       val expr = Equals(Times(a, b), Times(b, a))
 
-      new Theorem(forall(Seq(a.toVal, b.toVal), expr))
+      new Theorem(Forall(Seq(a.toVal, b.toVal), expr))
     }
   }
 
   def timesAssociativity(tpe: Type): Attempt[Theorem] = {
-    if (numericType(tpe) == Untyped) {
+    if (!isNumericType(tpe)) {
       Attempt.typeError("timesAssociativity", tpe)
     } else Attempt.success {
 
@@ -64,12 +68,12 @@ trait Arithmetic { self: Theory =>
 
       val expr = Equals(Times(a, Times(b, c)), Times(Times(a, b), c))
 
-      new Theorem(forall(Seq(a.toVal, b.toVal, c.toVal), expr))
+      new Theorem(Forall(Seq(a.toVal, b.toVal, c.toVal), expr))
     }
   }
 
   def distributivity(tpe: Type): Attempt[Theorem] = {
-    if (numericType(tpe) == Untyped) {
+    if (!isNumericType(tpe)) {
       Attempt.typeError("distributivity", tpe)
     } else Attempt.success {
 
@@ -79,13 +83,13 @@ trait Arithmetic { self: Theory =>
 
       val expr = Equals(Times(a, Plus(b, c)), Plus(Times(a, b), Times(a, c)))
 
-      new Theorem(forall(Seq(a.toVal, b.toVal, c.toVal), expr))
+      new Theorem(Forall(Seq(a.toVal, b.toVal, c.toVal), expr))
     }
   }
 
   lazy val divisionDecomposition: Theorem = {
-    val n = Variable.fresh("n", IntegerType)
-    val d = Variable.fresh("d", IntegerType)
+    val n = Variable.fresh("n", IntegerType())
+    val d = Variable.fresh("d", IntegerType())
 
     new Theorem(Forall(Seq(n.toVal, d.toVal), Implies(Not(Equals(d, IntegerLiteral(0))), 
       Equals(Division(Plus(n, d), d), Plus(Division(n, d), IntegerLiteral(1)))
@@ -123,12 +127,12 @@ trait Arithmetic { self: Theory =>
       (inductiveCase: (NaturalInductionHypotheses, Goal) => Attempt[Witness]): Attempt[Theorem] = {
     
     // Natural induction only works on BigInt.
-    if (base.getType != IntegerType) {
+    if (base.getType != IntegerType()) {
       return Attempt.typeError("naturalInduction", base.getType)
     }
 
     // Ensures that the property function is well-behaved.
-    val p = freeze(IntegerType, property)
+    val p = freeze(IntegerType(), property)
 
     // Attempts to prove the base case.
     val baseProposition = p(base)
@@ -142,10 +146,10 @@ trait Arithmetic { self: Theory =>
 
     // Creates induction hypotheses.
     // Each hypothesis is marked.
-    val n = Variable.fresh("n", IntegerType)
+    val n = Variable.fresh("n", IntegerType())
     val (greaterThanBase, m1) = new Theorem(GreaterThan(n, base)).mark
     val (propOfN, m2) = new Theorem(p(n)).mark
-    val lessEqN = Variable.fresh("lessEqN", IntegerType)
+    val lessEqN = Variable.fresh("lessEqN", IntegerType())
     val (propLessEqN, m3) = new Theorem(Forall(Seq(lessEqN.toVal),
       Implies(And(LessEquals(lessEqN, n), GreaterEquals(lessEqN, base)), p(lessEqN)))).mark
 
@@ -174,7 +178,7 @@ trait Arithmetic { self: Theory =>
     // Indicates that both the base and inductive case must succeed.
     // In which case the proof is complete and we return a theorem.
     Attempt.all(Seq(baseAttempt, inductiveAttempt)) map { case Seq(baseTheorem, inductiveTheorem) => 
-      val x = Variable.fresh("n", IntegerType)
+      val x = Variable.fresh("n", IntegerType())
       new Theorem(Forall(Seq(x.toVal), Implies(GreaterEquals(x, base), p(x))))
         .from(baseTheorem)
         .from(inductiveTheorem.unmark(m1).unmark(m2).unmark(m3))
@@ -195,7 +199,7 @@ trait Arithmetic { self: Theory =>
   def naturalInduction(property: Expr, base: Expr, baseCase: Goal => Attempt[Witness])
       (inductiveCase: (NaturalInductionHypotheses, Goal) => Attempt[Witness]): Attempt[Theorem] = {
 
-    forallToPredicate(property, IntegerType) flatMap { (f: Expr => Expr) =>
+    forallToPredicate(property, IntegerType()) flatMap { (f: Expr => Expr) =>
       naturalInduction(f, base, baseCase)(inductiveCase)
     }
   }

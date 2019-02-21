@@ -10,7 +10,8 @@ import org.scalatest._
 class RelationalReasoningSuite extends FunSuite {
 
   object Empty extends Theory {
-    override val program = InoxProgram(Context.empty, NoSymbols)
+    override val program = Program(inox.trees)(NoSymbols)
+    override val ctx = Context.empty
   }
 
   import Empty._
@@ -30,7 +31,7 @@ class RelationalReasoningSuite extends FunSuite {
 
   // Checking that the SMT solver can indeed prove the transitivity of the relations.
   val rels = Seq(EQ, LT, LE, GT, GE)  // All relations.
-  val tpes = Seq(CharType, IntegerType, Int32Type, RealType)  // Types which support the relations.
+  val tpes = Seq(CharType(), IntegerType(), Int32Type(), RealType())  // Types which support the relations.
   for (tpe <- tpes; rel1 <- rels; rel2 <- rels) compose(rel1, rel2) match {
     case Some(rel12) => viaSMT("Relation " + rel1 + " followed by " + rel2 + " (" + tpe + ")", {
       val a = Variable.fresh("a", tpe)
