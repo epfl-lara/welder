@@ -10,8 +10,8 @@ import org.scalatest._
 class TheoremsViaSMTSuite extends FunSuite {
 
   object Empty extends Theory {
-    override val program = Program(inox.trees)(NoSymbols)
-    override val ctx = Context.empty
+    override val program: InoxProgram = Program(inox.trees)(NoSymbols)
+    override val ctx: Context = Context.empty
   }
 
   import Empty._
