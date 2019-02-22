@@ -156,12 +156,12 @@ trait Relational { self: Theory =>
       val thiz = this
 
       new Chain {
-        val rel = thiz.nextRel
-        val nextRel = node.nextRel
-        val first = thiz.first
-        val next = node.next
-        val last = node.first
-        def relation = {
+        val rel: Rel = thiz.nextRel
+        val nextRel: Rel = node.nextRel
+        val first: Expr = thiz.first
+        val next: Goal => Attempt[Witness] = node.next
+        val last: Expr = node.first
+        val relation: Attempt[Theorem] = {
           val goal = new Goal(thiz.nextRel(thiz.first, node.first))
 
           catchFailedAttempts {
@@ -196,7 +196,7 @@ trait Relational { self: Theory =>
     private[welder] val rel: Rel
 
     /** Theorem stating the relation between the `first` and `last` expressions. */
-    private[welder] def relation: Attempt[Theorem]
+    private[welder] val relation: Attempt[Theorem]
 
     /** Sets the next expression, and following justification, in the equality chain. */
     override private[welder] def append(node: Node): Chain = {
@@ -205,22 +205,24 @@ trait Relational { self: Theory =>
       val newRel = compose(this.rel, this.nextRel).get  // Should never fail thanks to types.
 
       new Chain {
-        val rel = newRel
-        val nextRel = node.nextRel
-        val first = thiz.first
-        val last = node.first
-        val relation = {
+        val rel: Rel = newRel
+        val nextRel: Rel = node.nextRel
+        val first: Expr = thiz.first
+        val last: Expr = node.first
+        val relation: Attempt[Theorem] = {
           val goal = new Goal(thiz.nextRel(thiz.last, node.first))
           val attemptNext = for {
             witness <- thiz.next(goal)
             theorem <- witness.extractTheorem(goal)
           } yield theorem
 
-          Attempt.all(Seq(thiz.relation, attemptNext)) flatMap {
-            case Seq(thmRel, thmNext) => prove(newRel(thiz.first, node.first), thmRel, thmNext)
-          }
+
+          for {
+            thmRel <- thiz.relation
+            thmNext <- attemptNext
+          } yield new Theorem(newRel(thiz.first, node.first)).from(Seq(thmRel, thmNext))
         }
-        val next = node.next
+        val next: Goal => Attempt[Witness] = node.next
       }
     }
 
@@ -234,9 +236,11 @@ trait Relational { self: Theory =>
         theorem <- witness.extractTheorem(goal)
       } yield theorem
 
-      Attempt.all(Seq(relation, attemptNext)) flatMap {
-        case Seq(thmRel, thmNext) => prove(newRel(first, end), thmRel, thmNext)
-      }
+
+      for {
+        thmRel <- relation
+        thmNext <- attemptNext
+      } yield new Theorem(newRel(first, end)).from(Seq(thmRel, thmNext))
     }
   }
 }
